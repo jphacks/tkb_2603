@@ -19,6 +19,9 @@ import {
   type LogEntry,
   loadEngine,
   loadSettings,
+  appendInbox,
+  drainInbox,
+  onInboxChanged,
   onEngineChanged,
   onSettingsChanged,
   paramsFrom,
@@ -96,10 +99,18 @@ export class Runner {
     this.state.llmAvailable = this.settings.llmEnabled && !!this.settings.apiKey;
     onSettingsChanged((s) => {
       const speedChanged = s.speed !== this.settings.speed;
+      // 倍速を切り替える前に、今までの分を元の速さで進めておく(切り替えた瞬間に跳ねないように)
+      if (speedChanged) {
+        this.onTick();
+        this.lastTickReal = Date.now();
+      }
       this.settings = s;
       this.state.llmAvailable = s.llmEnabled && !!s.apiKey;
       if (speedChanged) this.restartTick();
       this.emit();
+    });
+    onInboxChanged(() => {
+      if (this.isLeader()) void this.drain();
     });
     // ほかのタブの保存を取り込む(タブごとに別々の器にならないように)
     onEngineChanged((saved) => {
@@ -113,8 +124,14 @@ export class Runner {
         return;
       }
       if (saved.writer === this.tabId) return;
+      const before = this.state;
       this.state = { ...saved.state, llmAvailable: this.state.llmAvailable };
       if (saved.lastTickReal) this.lastTickReal = saved.lastTickReal;
+      // ほかのタブで休憩を始めた・提案に答えた → このタブに残った古い提案を消す
+      if (saved.state.breakState || saved.state.prompt.notBefore !== before.prompt.notBefore) {
+        this.prompt = null;
+        this.waitingForBreakpoint = false;
+      }
       this.emit();
     });
     // 表に出たら、裏にあった間の時間をすぐ進める
@@ -161,10 +178,29 @@ export class Runner {
     await appendLog(entry, this.state.minute);
   }
 
+  /** 表に出ているタブが器を持つ(ほかのタブは受け箱に出来事を足すだけ) */
+  private isLeader(): boolean {
+    return document.visibilityState === 'visible';
+  }
+
   private push(obs: Observation): void {
     if (!this.settings.enabled) return;
+    if (!this.isLeader()) {
+      void appendInbox(obs);
+      return;
+    }
     this.state = observe(this.state, obs, paramsFrom(this.settings));
     this.saveSoon();
+    this.emit();
+  }
+
+  /** 裏のタブで起きた出来事を取り込む。時刻は今の計算上の分に合わせる */
+  private async drain(): Promise<void> {
+    const box = await drainInbox();
+    if (!box.length) return;
+    const p = paramsFrom(this.settings);
+    for (const obs of box) this.state = observe(this.state, { ...obs, t: this.state.minute }, p);
+    this.save();
     this.emit();
   }
 
@@ -181,7 +217,8 @@ export class Runner {
   private onTick(): void {
     // 複数のタブで同じ 1 分を 2 回数えないよう、表に出ているタブだけが進める。
     // 裏にあった間の時間は、表に戻った時にまとめて進める(作業していないので器は動かず、3 時間で 0 に戻る)
-    if (document.visibilityState !== 'visible') return;
+    if (!this.isLeader()) return;
+    void this.drain();
     if (!this.settings.enabled) {
       this.lastTickReal = Date.now();
       return;
@@ -223,6 +260,8 @@ export class Runner {
   }
 
   private checkGate(): void {
+    // 提案を出すのは表のタブだけ(タブの数だけ提案・記録が出ないように)
+    if (!this.isLeader()) return;
     if (!this.settings.enabled || this.prompt || this.state.breakState || this.finishedBreak) return;
     const p = paramsFrom(this.settings);
     const ctx = this.gateContext();

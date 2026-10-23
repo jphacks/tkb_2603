@@ -1,6 +1,6 @@
 // 設定と保存。chrome.storage.local に置く(自分たちだけで使う前提。キーは暗号化されない)。
 import type { NotifyMode } from '../core/gate';
-import { DEFAULT_PARAMS, type EngineState, initialState, type ModelParams } from '../core/types';
+import { DEFAULT_PARAMS, type EngineState, initialState, type ModelParams, type Observation } from '../core/types';
 
 export const CLASSIFIER_MODELS = [
   { id: 'claude-opus-5-5', label: 'Claude Opus 5.5(既定)' },
@@ -46,6 +46,7 @@ const KEYS = {
   settings: 'hitoiki:settings',
   engine: 'hitoiki:engine',
   log: 'hitoiki:log',
+  inbox: 'hitoiki:inbox',
 } as const;
 
 export async function loadSettings(): Promise<Settings> {
@@ -103,6 +104,31 @@ export function onEngineChanged(cb: (saved: SavedEngine | null) => void): () => 
   return () => browser.storage.onChanged.removeListener(listener);
 }
 
+// ---- 裏のタブで起きた出来事の受け箱 ----
+// 器を進めるのは表のタブだけ。裏のタブは出来事をここに足し、表のタブが取り込む(上書きで消えないように)
+
+export async function appendInbox(obs: Observation): Promise<void> {
+  const got = await browser.storage.local.get(KEYS.inbox);
+  const box = (got[KEYS.inbox] as Observation[] | undefined) ?? [];
+  box.push(obs);
+  await browser.storage.local.set({ [KEYS.inbox]: box.slice(-500) });
+}
+
+export async function drainInbox(): Promise<Observation[]> {
+  const got = await browser.storage.local.get(KEYS.inbox);
+  const box = (got[KEYS.inbox] as Observation[] | undefined) ?? [];
+  if (box.length) await browser.storage.local.remove(KEYS.inbox);
+  return box;
+}
+
+export function onInboxChanged(cb: () => void): () => void {
+  const listener = (changes: Record<string, { newValue?: unknown }>, area: string) => {
+    if (area === 'local' && changes[KEYS.inbox]?.newValue) cb();
+  };
+  browser.storage.onChanged.addListener(listener);
+  return () => browser.storage.onChanged.removeListener(listener);
+}
+
 // ---- 評価のログ(本文は残さない。件数・時刻・操作だけ) ----
 
 export type LogEntry =
@@ -134,5 +160,5 @@ export async function loadLog(): Promise<StoredLogEntry[]> {
 
 /** 計測データを消す(設定は残す) */
 export async function clearData(): Promise<void> {
-  await browser.storage.local.remove([KEYS.engine, KEYS.log]);
+  await browser.storage.local.remove([KEYS.engine, KEYS.log, KEYS.inbox]);
 }
