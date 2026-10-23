@@ -195,13 +195,21 @@ export class Runner {
   }
 
   /** 裏のタブで起きた出来事を取り込む。時刻は今の計算上の分に合わせる */
+  private draining = false;
   private async drain(): Promise<void> {
-    const box = await drainInbox();
-    if (!box.length) return;
-    const p = paramsFrom(this.settings);
-    for (const obs of box) this.state = observe(this.state, { ...obs, t: this.state.minute }, p);
-    this.save();
-    this.emit();
+    // onTick と onInboxChanged の両方から呼ばれるので、同じ出来事を 2 回取り込まないよう 1 本にする
+    if (this.draining) return;
+    this.draining = true;
+    try {
+      const box = await drainInbox();
+      if (!box.length) return;
+      const p = paramsFrom(this.settings);
+      for (const obs of box) this.state = observe(this.state, { ...obs, t: this.state.minute }, p);
+      this.save();
+      this.emit();
+    } finally {
+      this.draining = false;
+    }
   }
 
   /** 計算上の 1 分を進める。休憩の予定時間が過ぎたら休憩を終える。
