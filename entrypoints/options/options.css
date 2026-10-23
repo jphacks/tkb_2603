@@ -1,0 +1,23 @@
+:root {
+  color-scheme: light dark;
+  --bg: #fbfaf7;
+  --fg: #1f2328;
+  --muted: #6b7280;
+  --border: #e5e2da;
+  --accent: #1f8a70;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #23272a; --fg: #e9ecef; --muted: #9aa3ab; --border: #353a3e; --accent: #5fd3b0; }
+}
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: -apple-system, 'Hiragino Sans', 'Noto Sans JP', sans-serif; font-size: 14px; line-height: 1.6; }
+main { max-width: 640px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font-size: 22px; }
+h2 { font-size: 16px; margin: 0 0 8px; }
+section { border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin: 16px 0; }
+.muted { color: var(--muted); font-size: 13px; }
+.row { display: flex; gap: 8px; align-items: flex-start; margin: 6px 0; }
+.field { display: flex; flex-direction: column; gap: 4px; margin: 10px 0; }
+input[type='password'], select { padding: 6px 8px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: inherit; font: inherit; }
+button { margin: 8px 8px 0 0; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: inherit; font: inherit; cursor: pointer; }
+button.danger { border-color: #c0392b; color: #c0392b; }
+.saved { position: fixed; top: 16px; right: 16px; padding: 8px 12px; border-radius: 8px; background: var(--accent); color: #fff; }

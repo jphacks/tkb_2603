@@ -1,0 +1,393 @@
+// 器を動かす係。ChatGPT のタブの中で、計算上の 1 分ごとに tick する(service worker は 30 秒で止まるため)。
+// デモの倍速では、実時間 60 秒 ÷ speed ごとに 1 分進める。同じ計算を通す。
+import { applyPromptAction, type GateContext, type PromptAction, shouldPrompt } from '../core/gate';
+import {
+  breakMinutes,
+  cancelBreak,
+  endBreak,
+  load,
+  observe,
+  splitText,
+  startBreak,
+  tick,
+  topContributor,
+} from '../core/model';
+import { type ElementKey, type EngineState, initialState, type Observation } from '../core/types';
+import type { ClassifyResponse, ClassifyRequest } from '../shared/messages';
+import {
+  appendLog,
+  type LogEntry,
+  loadEngine,
+  loadSettings,
+  onEngineChanged,
+  onSettingsChanged,
+  paramsFrom,
+  saveEngine,
+  type Settings,
+} from '../shared/settings';
+import { ChatGptObserver } from './chatgpt';
+
+export interface PromptInfo {
+  load: number;
+  minutes: number;
+  top: ElementKey | null;
+}
+
+export interface FinishedBreak {
+  memo: string;
+  plannedMin: number;
+  top: ElementKey | null;
+}
+
+export interface UiSnapshot {
+  state: EngineState;
+  /** API キーは UI に渡さない(有無だけ) */
+  settings: Omit<Settings, 'apiKey'> & { hasApiKey: boolean };
+  load: number;
+  prompt: PromptInfo | null;
+  finishedBreak: FinishedBreak | null;
+  confirmEndBreak: boolean;
+  diagnostics: ChatGptObserver['diagnostics'];
+  lastClassify: { ok: boolean; model: string; ms: number; error?: string } | null;
+}
+
+type Listener = (snap: UiSnapshot) => void;
+
+export class Runner {
+  private state!: EngineState;
+  private settings!: Settings;
+  private observer: ChatGptObserver;
+  private listeners = new Set<Listener>();
+  private tickTimer: number | null = null;
+  private gateTimer: number | null = null;
+  private prompt: PromptInfo | null = null;
+  private waitingForBreakpoint = false;
+  private needSinceReal: number | null = null;
+  private finishedBreak: FinishedBreak | null = null;
+  private confirmEndBreak = false;
+  private previousTask = '';
+  private lastClassify: UiSnapshot['lastClassify'] = null;
+  private breakTopAtStart: ElementKey | null = null;
+  private readonly tabId = Math.random().toString(36).slice(2);
+  /** 最後に計算上の 1 分を進めた実時刻(ms) */
+  private lastTickReal = Date.now();
+
+  constructor() {
+    this.observer = new ChatGptObserver({
+      onPromptSent: (text) => this.onPromptSent(text),
+      onResponseDone: (text, userText, continuation) => this.onResponseDone(text, userText, continuation),
+      onErrorPaste: (lines) => {
+        this.push({ kind: 'verification', t: this.state.minute, count: 1, source: 'paste' });
+        void this.log({ type: 'observation', kind: 'error_paste', detail: { lines } });
+      },
+      onConversationSwitch: () => {
+        this.push({ kind: 'switch', t: this.state.minute, source: 'url' });
+        void this.log({ type: 'observation', kind: 'conversation_switch' });
+      },
+      onActivity: () => this.push({ kind: 'activity', t: this.state.minute }),
+    });
+  }
+
+  async start(): Promise<void> {
+    this.settings = await loadSettings();
+    const saved = await loadEngine();
+    this.state = saved.state;
+    this.lastTickReal = saved.lastTickReal ?? saved.realSavedAt;
+    this.state.llmAvailable = this.settings.llmEnabled && !!this.settings.apiKey;
+    onSettingsChanged((s) => {
+      const speedChanged = s.speed !== this.settings.speed;
+      this.settings = s;
+      this.state.llmAvailable = s.llmEnabled && !!s.apiKey;
+      if (speedChanged) this.restartTick();
+      this.emit();
+    });
+    // ほかのタブの保存を取り込む(タブごとに別々の器にならないように)
+    onEngineChanged((saved) => {
+      if (saved === null) {
+        // 「記録を消す」で消えた
+        this.state = { ...initialState(), llmAvailable: this.state.llmAvailable };
+        this.lastTickReal = Date.now();
+        this.prompt = null;
+        this.finishedBreak = null;
+        this.emit();
+        return;
+      }
+      if (saved.writer === this.tabId) return;
+      this.state = { ...saved.state, llmAvailable: this.state.llmAvailable };
+      if (saved.lastTickReal) this.lastTickReal = saved.lastTickReal;
+      this.emit();
+    });
+    // 表に出たら、裏にあった間の時間をすぐ進める
+    document.addEventListener('visibilitychange', () => this.onTick());
+    this.observer.start();
+    this.restartTick();
+    // 閉じていた間の時間を、壁時計の差で進める(作業していないので器は動かない。休憩中なら減る。3 時間で 0 に戻る)
+    this.onTick();
+    this.gateTimer = window.setInterval(() => this.checkGate(), 1000);
+    this.emit();
+  }
+
+  subscribe(fn: Listener): () => void {
+    this.listeners.add(fn);
+    fn(this.snapshot());
+    return () => this.listeners.delete(fn);
+  }
+
+  private snapshot(): UiSnapshot {
+    return {
+      state: this.state,
+      settings: (({ apiKey, ...rest }) => ({ ...rest, hasApiKey: !!apiKey }))(this.settings),
+      load: load(this.state),
+      prompt: this.prompt,
+      finishedBreak: this.finishedBreak,
+      confirmEndBreak: this.confirmEndBreak,
+      diagnostics: { ...this.observer.diagnostics, matched: { ...this.observer.diagnostics.matched } },
+      lastClassify: this.lastClassify,
+    };
+  }
+
+  private emit(): void {
+    const snap = this.snapshot();
+    for (const fn of this.listeners) fn(snap);
+  }
+
+  private restartTick(): void {
+    if (this.tickTimer !== null) clearInterval(this.tickTimer);
+    const intervalMs = Math.max(250, 60_000 / Math.max(1, this.settings.speed) / 4);
+    this.tickTimer = window.setInterval(() => this.onTick(), intervalMs);
+  }
+
+  private async log(entry: LogEntry): Promise<void> {
+    await appendLog(entry, this.state.minute);
+  }
+
+  private push(obs: Observation): void {
+    if (!this.settings.enabled) return;
+    this.state = observe(this.state, obs, paramsFrom(this.settings));
+    this.saveSoon();
+    this.emit();
+  }
+
+  /** 計算上の 1 分を進める。休憩の予定時間が過ぎたら休憩を終える。
+   *  present: 目の前に人がいる 1 分か(最後の 1 分だけ true。閉じていた間の補正では false) */
+  private advance(present: boolean): void {
+    const res = tick(this.state, paramsFrom(this.settings));
+    this.state = res.state;
+    if (res.dayReset) void this.log({ type: 'day_reset' });
+    const b = this.state.breakState;
+    if (b && this.state.minute - b.startedAt >= b.plannedMin) this.finishBreak(true, present);
+  }
+
+  private onTick(): void {
+    // 複数のタブで同じ 1 分を 2 回数えないよう、表に出ているタブだけが進める。
+    // 裏にあった間の時間は、表に戻った時にまとめて進める(作業していないので器は動かず、3 時間で 0 に戻る)
+    if (document.visibilityState !== 'visible') return;
+    if (!this.settings.enabled) {
+      this.lastTickReal = Date.now();
+      return;
+    }
+    const due = Math.floor(((Date.now() - this.lastTickReal) / 60_000) * this.settings.speed);
+    if (due < 1) return;
+    const n = Math.min(due, 24 * 60);
+    for (let i = 0; i < n; i++) this.advance(i === n - 1 && due <= 2);
+    this.lastTickReal += (due * 60_000) / this.settings.speed;
+    this.save();
+    this.emit();
+  }
+
+  private save(): void {
+    if (this.saveTimer !== null) {
+      clearTimeout(this.saveTimer);
+      this.saveTimer = null;
+    }
+    void saveEngine(this.state, this.tabId, this.lastTickReal);
+  }
+
+  private saveTimer: number | null = null;
+  /** 出来事のたびに保存すると多いので、少しまとめる */
+  private saveSoon(): void {
+    if (this.saveTimer !== null) return;
+    this.saveTimer = window.setTimeout(() => this.save(), 1500);
+  }
+
+  private gateContext(): GateContext {
+    const doneAt = this.observer.lastResponseDoneAt;
+    return {
+      generating: this.observer.isGenerating(),
+      typing: this.observer.isTyping(),
+      composerHasText: this.observer.composerText().length > 0,
+      tabVisible: document.visibilityState === 'visible',
+      secondsSinceResponse: doneAt === null ? null : ((Date.now() - doneAt) / 1000) * this.settings.speed,
+      quietSeconds: 10,
+    };
+  }
+
+  private checkGate(): void {
+    if (!this.settings.enabled || this.prompt || this.state.breakState || this.finishedBreak) return;
+    const p = paramsFrom(this.settings);
+    const ctx = this.gateContext();
+    const needNow = load(this.state) >= p.threshold && this.state.minute >= this.state.prompt.notBefore;
+    if (needNow && this.needSinceReal === null) this.needSinceReal = Date.now();
+    if (!needNow) this.needSinceReal = null;
+    if (!shouldPrompt(this.state, p, this.settings.mode, ctx, this.waitingForBreakpoint)) return;
+
+    const l = load(this.state);
+    const top = topContributor(this.state);
+    const minutes = breakMinutes(l, this.settings.breakScale);
+    this.prompt = { load: l, minutes, top };
+    const waitedSec = this.needSinceReal === null ? null : Math.round((Date.now() - this.needSinceReal) / 1000);
+    void this.log({ type: 'prompt_shown', load: Math.round(l), mode: this.settings.mode, waitedSec, top });
+    this.waitingForBreakpoint = false;
+    if (this.settings.mode === 'auto_timer') {
+      // 自動タイマー: 通知と同時に休憩を始める(メモは休憩中に書ける)
+      this.beginBreak(minutes, '');
+    }
+    this.emit();
+  }
+
+  // ---- 画面からの操作 ----
+
+  respondToPrompt(action: PromptAction, memo = ''): void {
+    if (!this.prompt) return;
+    void this.log({ type: 'prompt_action', action });
+    if (action === 'now') {
+      if (!this.state.breakState) this.beginBreak(this.prompt.minutes, memo);
+    } else {
+      // 自動タイマーで断ったとき: 休憩を取り消す(「おかえり」を出さない。断った回数は保つ)
+      if (this.state.breakState) {
+        void this.log({ type: 'break_cancelled' });
+        this.state = cancelBreak(this.state);
+      }
+      this.state = applyPromptAction(this.state, action);
+      this.waitingForBreakpoint = action === 'next_breakpoint';
+    }
+    this.prompt = null;
+    this.save();
+    this.emit();
+  }
+
+  /** 器が低くても自分で休憩を始める */
+  startManualBreak(memo: string): void {
+    this.prompt = null;
+    this.beginBreak(breakMinutes(Math.max(80, load(this.state)), this.settings.breakScale), memo);
+  }
+
+  setMemo(memo: string): void {
+    if (!this.state.breakState) return;
+    this.state = { ...this.state, breakState: { ...this.state.breakState, memo } };
+    this.saveSoon();
+    this.emit();
+  }
+
+  private beginBreak(minutes: number, memo: string): void {
+    this.breakTopAtStart = topContributor(this.state);
+    void this.log({ type: 'break_start', plannedMin: minutes, hasMemo: memo.length > 0, load: Math.round(load(this.state)) });
+    this.state = startBreak(this.state, minutes, memo);
+    this.confirmEndBreak = false;
+    this.save();
+    this.emit();
+  }
+
+  private finishBreak(completed: boolean, present = true): void {
+    const b = this.state.breakState;
+    if (!b) return;
+    void this.log({
+      type: 'break_end',
+      plannedMin: b.plannedMin,
+      actualMin: this.state.minute - b.startedAt,
+      completed,
+    });
+    this.finishedBreak = { memo: b.memo, plannedMin: b.plannedMin, top: this.breakTopAtStart };
+    this.state = endBreak(this.state, present);
+    this.confirmEndBreak = false;
+    this.prompt = null;
+    this.save();
+    this.emit();
+  }
+
+  /** 休憩を途中で終える(確認の後) */
+  endBreakEarly(): void {
+    this.finishBreak(false);
+  }
+
+  askEndBreak(): void {
+    this.confirmEndBreak = true;
+    this.emit();
+  }
+
+  cancelEndBreak(): void {
+    this.confirmEndBreak = false;
+    this.emit();
+  }
+
+  sendFeedback(value: 'good' | 'ok' | 'unneeded'): void {
+    void this.log({ type: 'feedback', value });
+    this.finishedBreak = null;
+    this.emit();
+  }
+
+  dismissFinished(): void {
+    this.finishedBreak = null;
+    this.emit();
+  }
+
+  openOptions(): void {
+    void browser.runtime.sendMessage({ type: 'open_options' });
+  }
+
+  // ---- ChatGPT からの出来事 ----
+
+  private onPromptSent(text: string): void {
+    this.push({ kind: 'prompt_sent', t: this.state.minute, chars: text.length });
+    void this.log({ type: 'observation', kind: 'prompt_sent', detail: { chars: text.length } });
+    // 休憩中に送信したら、休憩を終えるか確認する(決定)
+    if (this.state.breakState) this.askEndBreak();
+  }
+
+  /** continuation: 終わったと思った回答が、その後も伸びた分(読む量だけ足し、分類はしない) */
+  private onResponseDone(text: string, userText: string, continuation: boolean): void {
+    // 計測を止めている時は、記録も API への送信もしない
+    if (!this.settings.enabled) return;
+    const { jaChars, enWords } = splitText(text);
+    this.push({ kind: 'response_done', t: this.state.minute, chars: jaChars, enWords });
+    void this.log({ type: 'observation', kind: 'response_done', detail: { jaChars, enWords, continuation } });
+    if (!continuation) void this.classify(userText, text);
+  }
+
+  private async classify(userText: string, assistantText: string): Promise<void> {
+    if (!this.settings.enabled || !this.settings.llmEnabled || !this.settings.apiKey) return;
+    const req: ClassifyRequest = { type: 'classify', userText, assistantText, previousTask: this.previousTask };
+    let res: ClassifyResponse;
+    try {
+      res = await browser.runtime.sendMessage(req);
+    } catch (e) {
+      res = { ok: false, error: e instanceof Error ? e.message : String(e), model: this.settings.model, ms: 0 };
+    }
+    this.lastClassify = res.ok
+      ? { ok: true, model: res.model, ms: res.ms }
+      : { ok: false, model: res.model, ms: res.ms, error: res.error };
+    void this.log({ type: 'classify', ok: res.ok, model: res.model, ms: res.ms, error: res.ok ? undefined : res.error });
+    // 使えなかった時は、内部で判断を「未計測」とする(器は ÷5 のまま遅めにたまる)
+    this.state.llmAvailable = res.ok;
+    if (!res.ok) return this.emit();
+
+    const t = this.state.minute;
+    const r = res.result;
+    if (r.decision_requests.length) this.push({ kind: 'decision', t, count: r.decision_requests.length });
+    if (r.verification_events.length) {
+      this.push({ kind: 'verification', t, count: r.verification_events.length, source: 'llm' });
+    }
+    if (r.topic_shift.shift) this.push({ kind: 'switch', t, source: 'llm' });
+    if (r.topic_shift.current_task) this.previousTask = r.topic_shift.current_task;
+    void this.log({
+      type: 'observation',
+      kind: 'classified',
+      detail: {
+        decisions: r.decision_requests.length,
+        verifications: r.verification_events.length,
+        shift: r.topic_shift.shift,
+      },
+    });
+    this.emit();
+  }
+}

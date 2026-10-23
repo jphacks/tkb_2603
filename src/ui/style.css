@@ -1,0 +1,135 @@
+/* Shadow DOM の中だけに効く。rem はページのフォントサイズを引き継ぐので px で書く(調査10) */
+.hi-root {
+  --hi-bg: #fbfaf7;
+  --hi-fg: #1f2328;
+  --hi-muted: #6b7280;
+  --hi-border: #e5e2da;
+  --hi-accent: #1f8a70;
+  --hi-accent-fg: #ffffff;
+  --hi-warn: #e07a3f;
+  --hi-track: #e8e6e0;
+  --hi-soft: #f1efe9;
+  --hi-shadow: 0 8px 28px rgba(0, 0, 0, 0.14);
+  font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--hi-fg);
+}
+@media (prefers-color-scheme: dark) {
+  .hi-root {
+    --hi-bg: #23272a;
+    --hi-fg: #e9ecef;
+    --hi-muted: #9aa3ab;
+    --hi-border: #353a3e;
+    --hi-accent: #5fd3b0;
+    --hi-accent-fg: #10231d;
+    --hi-warn: #f0a070;
+    --hi-track: #3a4044;
+    --hi-soft: #2c3134;
+    --hi-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+  }
+}
+.hi-root * { box-sizing: border-box; }
+
+.hi-pill {
+  position: fixed; right: 20px; bottom: 96px; z-index: 2147483000;
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 12px 6px 8px; border-radius: 999px;
+  border: 1px solid var(--hi-border); background: var(--hi-bg); color: var(--hi-fg);
+  box-shadow: var(--hi-shadow); cursor: pointer; font: inherit;
+}
+.hi-pill-label { font-size: 12px; color: var(--hi-muted); }
+.hi-pill-value { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.hi-demo {
+  position: fixed; right: 20px; bottom: 140px; z-index: 2147483000;
+  padding: 2px 10px; border-radius: 999px; background: var(--hi-warn); color: #fff;
+  font-size: 12px; font-weight: 700;
+}
+
+.hi-card {
+  position: fixed; z-index: 2147483001; width: 340px; max-width: calc(100vw - 32px);
+  padding: 16px; border-radius: 16px; border: 1px solid var(--hi-border);
+  background: var(--hi-bg); color: var(--hi-fg); box-shadow: var(--hi-shadow);
+}
+.hi-prompt, .hi-welcome { right: 20px; bottom: 140px; }
+.hi-detail { right: 20px; bottom: 140px; max-height: calc(100vh - 180px); overflow: auto; }
+.hi-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.hi-title { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+.hi-subtitle { font-size: 12px; color: var(--hi-muted); margin: 12px 0 6px; }
+.hi-body { margin-bottom: 8px; }
+.hi-muted { color: var(--hi-muted); font-size: 12px; }
+.hi-note { color: var(--hi-muted); font-size: 11px; margin-top: 10px; }
+.hi-x { border: none; background: none; color: var(--hi-muted); font-size: 20px; cursor: pointer; line-height: 1; }
+
+.hi-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.hi-btn {
+  font: inherit; font-size: 13px; padding: 7px 12px; border-radius: 10px; cursor: pointer;
+  border: 1px solid var(--hi-border); background: var(--hi-soft); color: var(--hi-fg);
+}
+.hi-primary { background: var(--hi-accent); color: var(--hi-accent-fg); border-color: transparent; font-weight: 700; }
+.hi-ghost { background: transparent; }
+.hi-link { margin-top: 8px; border: none; background: none; color: var(--hi-muted); font: inherit; font-size: 12px; cursor: pointer; }
+.hi-input {
+  width: 100%; margin-top: 8px; padding: 7px 10px; border-radius: 10px; font: inherit; font-size: 13px;
+  border: 1px solid var(--hi-border); background: var(--hi-soft); color: var(--hi-fg);
+}
+
+.hi-reason { display: flex; flex-wrap: wrap; gap: 6px; }
+.hi-chip { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--hi-soft); border: 1px solid var(--hi-border); }
+
+.hi-gauge-bar { position: relative; height: 12px; border-radius: 6px; background: var(--hi-track); overflow: hidden; display: flex; }
+.hi-gauge-uf { height: 100%; background: var(--hi-muted); }
+.hi-gauge-rf { height: 100%; background: var(--hi-accent); }
+.hi-gauge-th { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--hi-warn); }
+.hi-gauge-legend { display: flex; justify-content: space-between; margin-top: 4px; font-size: 13px; }
+
+.hi-row { display: grid; grid-template-columns: 76px 1fr 48px; align-items: center; gap: 8px; margin: 4px 0; font-size: 13px; }
+.hi-row-value { text-align: right; font-variant-numeric: tabular-nums; color: var(--hi-muted); font-size: 12px; }
+.hi-bar { height: 8px; border-radius: 4px; background: var(--hi-track); overflow: hidden; }
+.hi-bar-fill { height: 100%; background: var(--hi-accent); transition: width 0.4s; }
+
+.hi-spark { display: block; width: 100%; }
+.hi-spark-line { fill: none; stroke: var(--hi-accent); stroke-width: 2; }
+.hi-spark-th { stroke: var(--hi-warn); stroke-dasharray: 4 3; stroke-width: 1; }
+
+.hi-diag { margin-top: 10px; padding: 8px; border-radius: 8px; background: var(--hi-soft); font-size: 11px; word-break: break-all; }
+.hi-diag code { font-size: 11px; }
+
+.hi-overlay {
+  position: fixed; inset: 0; z-index: 2147483002; background: rgba(0, 0, 0, 0.35);
+  display: flex; align-items: center; justify-content: center;
+}
+.hi-break { position: relative; text-align: center; width: 360px; }
+.hi-timer { position: relative; width: 160px; height: 160px; margin: 8px auto; }
+.hi-timer svg { position: absolute; inset: 0; }
+.hi-timer-inner { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--hi-accent); }
+.hi-timer-text { font-size: 18px; font-weight: 700; color: var(--hi-fg); font-variant-numeric: tabular-nums; }
+.hi-tabs { display: flex; justify-content: center; gap: 6px; margin: 8px 0; flex-wrap: wrap; }
+.hi-tab { font: inherit; font-size: 12px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--hi-border); background: transparent; color: var(--hi-fg); cursor: pointer; }
+.hi-tab.hi-on { background: var(--hi-accent); color: var(--hi-accent-fg); border-color: transparent; }
+.hi-break .hi-actions { justify-content: center; }
+.hi-confirm { margin-top: 12px; padding: 10px; border-radius: 10px; background: var(--hi-soft); }
+
+.hi-memo { padding: 8px 10px; border-radius: 10px; background: var(--hi-soft); margin-bottom: 10px; }
+.hi-memo-text { font-weight: 700; }
+
+.hi-toast {
+  position: fixed; right: 20px; bottom: 140px; z-index: 2147483001;
+  padding: 10px 14px; border-radius: 12px; background: var(--hi-fg); color: var(--hi-bg); box-shadow: var(--hi-shadow);
+}
+
+/* ピクトグラムの動き */
+.hi-picto-body { transform-origin: 32px 42px; }
+.hi-picto-reach .hi-picto-body { animation: hi-reach 2.4s ease-in-out infinite; }
+.hi-picto-shoulder .hi-arm-l { transform-origin: 32px 24px; animation: hi-spin 2s linear infinite; }
+.hi-picto-shoulder .hi-arm-r { transform-origin: 32px 24px; animation: hi-spin 2s linear infinite reverse; }
+.hi-picto-sway .hi-picto-body { animation: hi-sway 3s ease-in-out infinite; }
+.hi-picto-far .hi-picto-body { animation: hi-far 4s ease-in-out infinite; }
+@keyframes hi-reach { 0%, 100% { transform: scaleY(0.94); } 50% { transform: scaleY(1.04); } }
+@keyframes hi-spin { to { transform: rotate(360deg); } }
+@keyframes hi-sway { 0%, 100% { transform: rotate(-10deg); } 50% { transform: rotate(10deg); } }
+@keyframes hi-far { 0%, 100% { transform: translateX(-3px); } 50% { transform: translateX(3px); } }
+@media (prefers-reduced-motion: reduce) {
+  .hi-picto-body, .hi-arm-l, .hi-arm-r { animation: none !important; }
+}
