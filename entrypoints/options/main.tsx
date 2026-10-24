@@ -8,6 +8,8 @@ import {
   saveSettings,
   type Settings,
 } from '../../src/shared/settings';
+import { DEFAULT_PARAMS } from '../../src/core/types';
+import { DEMO } from '../../src/shared/flags';
 import type { ClassifyResponse } from '../../src/shared/messages';
 import './options.css';
 
@@ -80,10 +82,10 @@ function Options() {
             <option value={1.5}>長め</option>
           </select>
         </label>
-        <label className="field">
+        {(DEMO || s.g !== DEFAULT_PARAMS.g) && <label className="field">
           たまる速さ: {s.g.toFixed(1)}(標準 3.2 = ふつうの作業で約 50 分)
           <input type="range" min={1.6} max={6.4} step={0.4} value={s.g} onChange={(e) => update({ g: Number(e.target.value) })} />
-        </label>
+        </label>}
       </section>
 
       <section>
@@ -126,7 +128,7 @@ function Options() {
         </label>
       </section>
 
-      <section>
+      {(DEMO || s.speed !== 1) && <section>
         <h2>デモ</h2>
         <label className="field">
           時計の速さ
@@ -138,7 +140,7 @@ function Options() {
           </select>
         </label>
         <p className="muted">本物と同じ計算を、時計だけ速めて動かします。画面に「デモ: ○倍速」と出ます。</p>
-      </section>
+      </section>}
     </main>
   );
 }

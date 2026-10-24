@@ -38,7 +38,8 @@ function readSettings(): Settings {
   const c = vscode.workspace.getConfiguration('hitoiki');
   return {
     speed: Math.max(1, c.get<number>('speed', 1)),
-    threshold: c.get<number>('threshold', VSCODE_PARAMS.threshold),
+    // settings.json に直接書かれた範囲外の値も、Chrome 版と同じ 50〜95 に収める
+    threshold: Math.min(95, Math.max(50, c.get<number>('threshold', VSCODE_PARAMS.threshold))),
     breakScale: c.get<number>('breakScale', 1),
   };
 }
