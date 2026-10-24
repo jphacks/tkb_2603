@@ -1,7 +1,9 @@
 import { expect, it } from 'vitest';
 import { load } from '../../src/core/model';
 import { DEFAULT_PARAMS } from '../../src/core/types';
-import { BULK_CAP_CHARS, SWITCH_MIN_INTERVAL_MS, TYPING_QUIET_MS, Tracker, type TextChangeLike } from './tracker';
+import { BULK_CAP_CHARS, SWITCH_MIN_INTERVAL_MS, TYPING_QUIET_MS, Tracker, VSCODE_PARAMS, type TextChangeLike } from './tracker';
+
+const idle = { taskRunning: false, debugging: false, focused: true };
 
 // VS Code の API をまねた形
 const uri = (path: string, scheme = 'file') => ({ scheme, toString: () => `${scheme}://${path}` });
@@ -11,13 +13,29 @@ const change = (text: string, opts: { scheme?: string; isDirty?: boolean; reason
   reason: opts.reason,
 });
 
-it('まとまった挿入は読む量になり、2,000 字で頭打ちにする', () => {
+it('まとまった挿入は読む量になり、500 字で頭打ちにする', () => {
   const t = new Tracker();
-  t.onTextChange(change('あ'.repeat(653)), 0);
-  expect(t.state.readBacklogMin).toBeCloseTo(1);
+  t.onTextChange(change('あ'.repeat(300)), 0);
+  expect(t.state.readBacklogMin).toBeCloseTo(300 / 653);
   const capped = new Tracker();
   capped.onTextChange(change('あ'.repeat(10_000)), 0);
   expect(capped.state.readBacklogMin).toBeCloseTo(BULK_CAP_CHARS / DEFAULT_PARAMS.jaCharsPerMin);
+});
+
+it('補完を何回も受け入れても読む残りは 2 分で頭打ちになり、止まれば提案が出る', () => {
+  const t = new Tracker(undefined, { ...VSCODE_PARAMS, threshold: 5 });
+  let now = 0;
+  for (let min = 0; min < 10; min++) {
+    for (let k = 0; k < 5; k++) t.onTextChange(change('const x = 1;\n'.repeat(30)), now);
+    t.onCommandEnd(1, now);
+    t.tick();
+    now += 60_000;
+  }
+  expect(t.state.readBacklogMin).toBeLessThanOrEqual(VSCODE_PARAMS.readBacklogCapMin);
+  expect(t.checkPrompt(now, idle)).toBeNull(); // 読む残りがある間は区切りでない
+  t.tick();
+  t.tick();
+  expect(t.checkPrompt(now, idle)).not.toBeNull();
 });
 
 it('打鍵は入力として扱い、読む量にしない', () => {
@@ -63,14 +81,14 @@ it('ファイルの切替を数え、短い間の行き来と同じファイル�
 });
 
 it('失敗が続くと器がたまり、区切りで 1 回だけ提案して、間を空ける', () => {
-  const t = new Tracker(undefined, { ...DEFAULT_PARAMS, threshold: 20 });
+  const t = new Tracker(undefined, { ...VSCODE_PARAMS, threshold: 20 });
   let now = 0;
   let prompts: string[] = [];
   for (let min = 0; min < 30; min++) {
     t.onCommandEnd(1, now);
     t.tick();
     now += 60_000;
-    const m = t.checkPrompt(now, { taskRunning: false, debugging: false });
+    const m = t.checkPrompt(now, idle);
     if (m) prompts.push(m);
   }
   expect(load(t.state)).toBeGreaterThan(20);
@@ -81,16 +99,17 @@ it('失敗が続くと器がたまり、区切りで 1 回だけ提案して、�
   expect(t.state.prompt.notBefore).toBeGreaterThan(t.state.minute - 15);
 });
 
-it('入力中・タスクの実行中・デバッグ中は提案しない', () => {
-  const t = new Tracker(undefined, { ...DEFAULT_PARAMS, threshold: 0.5 });
+it('入力中・タスクの実行中・デバッグ中・VS Code が裏の時は提案しない', () => {
+  const t = new Tracker(undefined, { ...VSCODE_PARAMS, threshold: 0.5 });
   t.onCommandEnd(1, 0);
   t.tick();
   t.onTextChange(change('a'), 100);
-  expect(t.checkPrompt(100 + TYPING_QUIET_MS - 1, { taskRunning: false, debugging: false })).toBeNull();
+  expect(t.checkPrompt(100 + TYPING_QUIET_MS - 1, idle)).toBeNull();
   const quiet = 100 + TYPING_QUIET_MS;
-  expect(t.checkPrompt(quiet, { taskRunning: true, debugging: false })).toBeNull();
-  expect(t.checkPrompt(quiet, { taskRunning: false, debugging: true })).toBeNull();
-  expect(t.checkPrompt(quiet, { taskRunning: false, debugging: false })).not.toBeNull();
+  expect(t.checkPrompt(quiet, { ...idle, taskRunning: true })).toBeNull();
+  expect(t.checkPrompt(quiet, { ...idle, debugging: true })).toBeNull();
+  expect(t.checkPrompt(quiet, { ...idle, focused: false })).toBeNull();
+  expect(t.checkPrompt(quiet, idle)).not.toBeNull();
 });
 
 it('判断は取れないので、器は 5 要素の平均で遅めにたまる(判断の寄与は 0)', () => {

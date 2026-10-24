@@ -62,7 +62,7 @@ export type Observation =
   | { kind: 'activity'; t: number }
   | { kind: 'decision'; t: number; count: number }
   | { kind: 'verification'; t: number; count: number; source: 'paste' | 'llm' | 'exit_code' }
-  | { kind: 'switch'; t: number; source: 'url' | 'llm' };
+  | { kind: 'switch'; t: number; source: 'url' | 'llm' | 'file' };
 
 export type StretchId = 'reach' | 'shoulder' | 'sway';
 

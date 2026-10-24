@@ -76,8 +76,36 @@ async function main() {
   // 区切り(タスクが走っていない・入力していない)で提案が出るのを待つ
   const t1 = Date.now();
   while (api.promptsShown() === 0 && Date.now() - t1 < 15_000) await sleep(200);
+  log('窓が前にあるか', vscode.window.state.focused);
   log('提案の数', api.promptsShown(), `待った秒数=${((Date.now() - t1) / 1000).toFixed(1)}`, status());
   if (api.promptsShown() === 0) throw new Error('提案が出なかった');
+
+  // 補完を何回も受け入れた後(まとまった挿入が続いた後)でも、止まれば提案が出るか
+  await vscode.commands.executeCommand('hitoiki.reset');
+  const doc = await vscode.workspace.openTextDocument({ language: 'typescript', content: '' });
+  await vscode.window.showTextDocument(doc);
+  // 日本語の説明つきの補完(1 回 500 字を超える)を、1 周に 3 回受け入れる。読む残りは上限(2 分)まで積まれる
+  const snippet = '// 二つの数を足した値を返します。引数は数値で、結果も数値です。\nexport const add = (a: number, b: number) => a + b;\n'.repeat(20);
+  let maxBacklog = 0;
+  let j = 0;
+  while (api.tracker.load() < 80 && j < 150) {
+    for (let k = 0; k < 3; k++) {
+      const edit = new vscode.WorkspaceEdit();
+      edit.insert(doc.uri, doc.lineAt(doc.lineCount - 1).range.end, snippet);
+      await vscode.workspace.applyEdit(edit);
+    }
+    maxBacklog = Math.max(maxBacklog, api.tracker.state.readBacklogMin);
+    await runFailingTask(`c${j++}`);
+    await sleep(300);
+  }
+  log('補完を止めた', `回数=${j}`, `読む残りの最大=${maxBacklog.toFixed(2)} 分`, status());
+  if (maxBacklog < 1) throw new Error('まとまった挿入で読む残りが 1 分以上にならなかった');
+  if (maxBacklog > 2) throw new Error('読む残りが上限(2 分)を超えた');
+  const before2 = api.promptsShown();
+  const t2 = Date.now();
+  while (api.promptsShown() === before2 && Date.now() - t2 < 15_000) await sleep(200);
+  log('補完の後の提案', api.promptsShown() - before2, `待った秒数=${((Date.now() - t2) / 1000).toFixed(1)}`, status());
+  if (api.promptsShown() === before2) throw new Error('補完の後に提案が出なかった');
 
   // 通知を撮る(E2E_SHOT にファイルの場所を渡した時だけ)
   if (process.env.E2E_SHOT) {

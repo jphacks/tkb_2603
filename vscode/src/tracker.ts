@@ -6,8 +6,13 @@ import { DEFAULT_PARAMS, type ElementKey, type EngineState, type ModelParams, ty
 
 /** これ以上の文字数が 1 回の変更で入ったら「まとまった挿入」(読む量)とみなす。それ未満は入力 */
 export const BULK_MIN_CHARS = 100;
-/** 読む量に入れる、1 回の挿入の上限(字) */
-export const BULK_CAP_CHARS = 2000;
+/** 読む量に入れる、1 回の挿入の上限(字)。補完を続けて受け入れても、読む残りが積み上がりすぎないように */
+export const BULK_CAP_CHARS = 500;
+/**
+ * VS Code 用のパラメータ。読む残りの上限を小さくする(core の区切りは「読む残り < 1 分」が条件で、
+ * VS Code には送信のように読む残りを 0 に戻す出来事が無いため。止まれば 2 分で区切りになる)
+ */
+export const VSCODE_PARAMS: ModelParams = { ...DEFAULT_PARAMS, readBacklogCapMin: 2 };
 /** この間隔より短いファイルの切替は数えない(行き来の間引き、実時間 ms) */
 export const SWITCH_MIN_INTERVAL_MS = 5000;
 /** 入力がこの時間止まっていれば区切りとみなす(実時間 ms) */
@@ -31,8 +36,10 @@ export interface TextChangeLike {
 }
 
 export interface GateInfo {
-  /** 実行中のタスクがあるか */
+  /** 実行中のタスクがあるか(tsc --watch のような終わらないタスクは除く) */
   taskRunning: boolean;
+  /** VS Code の窓が前にあるか */
+  focused: boolean;
   /** デバッグ中か */
   debugging: boolean;
 }
@@ -58,7 +65,7 @@ export class Tracker {
   private lastSwitchAt = -Infinity;
   private activeUri: string | null = null;
 
-  constructor(state: EngineState = initialState(), params: ModelParams = DEFAULT_PARAMS) {
+  constructor(state: EngineState = initialState(), params: ModelParams = VSCODE_PARAMS) {
     this.state = state;
     this.params = params;
   }
@@ -104,8 +111,7 @@ export class Tracker {
       return;
     }
     this.lastSwitchAt = nowMs;
-    // core の切替の source は 'url' | 'llm'。ファイルの URI なので 'url' に寄せる
-    this.push({ kind: 'switch', t: this.state.minute, source: 'url' });
+    this.push({ kind: 'switch', t: this.state.minute, source: 'file' });
   }
 
   /** onDidEndTerminalShellExecution / onDidEndTaskProcess。失敗(終了コード ≠ 0)だけを確認・検証に数える */
@@ -135,12 +141,13 @@ export class Tracker {
     return load(this.state);
   }
 
-  gateContext(nowMs: number): GateContext {
+  gateContext(nowMs: number, focused = true): GateContext {
     return {
       generating: false,
       typing: nowMs - this.lastTypingAt < TYPING_QUIET_MS,
       composerHasText: false,
-      tabVisible: true,
+      // 裏にある時は出さない(出した時点で間を空けるので、見られないまま次が遠くなる)
+      tabVisible: focused,
       secondsSinceResponse: null,
       quietSeconds: 0,
     };
@@ -152,7 +159,7 @@ export class Tracker {
    */
   checkPrompt(nowMs: number, info: GateInfo): string | null {
     if (info.taskRunning || info.debugging) return null;
-    if (!shouldPrompt(this.state, this.params, this.gateContext(nowMs))) return null;
+    if (!shouldPrompt(this.state, this.params, this.gateContext(nowMs, info.focused))) return null;
     const message = promptMessage(topContributor(this.state));
     this.state = applyPromptAction(this.state, 'decline');
     return message;

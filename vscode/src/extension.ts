@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 import { contributionShares } from '../../src/core/model';
 import { DEFAULT_PARAMS, ELEMENT_KEYS, ELEMENT_LABELS, type EngineState, type ModelParams } from '../../src/core/types';
-import { Tracker } from './tracker';
+import { Tracker, VSCODE_PARAMS } from './tracker';
 
 const STATE_KEY = 'hitoiki:engine';
 /** 区切りかどうかを見る間隔(実時間 ms) */
@@ -23,12 +23,12 @@ function readSettings(): Settings {
   const c = vscode.workspace.getConfiguration('hitoiki');
   return {
     speed: Math.max(1, c.get<number>('speed', 1)),
-    threshold: c.get<number>('threshold', DEFAULT_PARAMS.threshold),
+    threshold: c.get<number>('threshold', VSCODE_PARAMS.threshold),
   };
 }
 
 function paramsFrom(s: Settings): ModelParams {
-  return { ...DEFAULT_PARAMS, threshold: s.threshold };
+  return { ...VSCODE_PARAMS, threshold: s.threshold };
 }
 
 /** 動作確認(結合テスト)から中を見るための口 */
@@ -61,7 +61,7 @@ export function activate(context: vscode.ExtensionContext): HitoikiApi {
       if (k === 'decision') return `${ELEMENT_LABELS[k]}: 未計測`;
       return `${ELEMENT_LABELS[k]}: ${shares ? Math.round(shares[k] * 100) : 0}%`;
     });
-    status.tooltip = `負担の目安(しきい値 ${settings.threshold})\n前の休憩からの内訳\n${lines.join('\n')}`;
+    status.tooltip = `負担の目安(しきい値 ${settings.threshold})\n今日の内訳\n${lines.join('\n')}`;
   };
 
   const save = () =>
@@ -80,7 +80,9 @@ export function activate(context: vscode.ExtensionContext): HitoikiApi {
 
   const gateTimer = setInterval(() => {
     const message = tracker.checkPrompt(Date.now(), {
-      taskRunning: vscode.tasks.taskExecutions.length > 0,
+      // tsc --watch・npm run dev のような終わらないタスクは、実行中に数えない
+      taskRunning: vscode.tasks.taskExecutions.some((e) => !e.task.isBackground),
+      focused: vscode.window.state.focused,
       debugging: vscode.debug.activeDebugSession !== undefined,
     });
     if (!message) return;
