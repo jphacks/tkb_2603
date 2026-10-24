@@ -62,11 +62,12 @@ export function App({ runner }: { runner: Runner }) {
 
 function Dock({ snap, runner, pill, onOpen }: { snap: UiSnapshot; runner: Runner; pill: RefObject<HTMLButtonElement | null>; onOpen: () => void }) {
   const { ref, bottom } = useDockPosition();
+  const minutes = breakMinutes(snap.load, snap.settings.breakScale);
   return <div ref={ref} className="hi-dock" style={{ bottom }}>
     {snap.state.prompt.waitingForUser && <button className="hi-ready" onClick={() => runner.startDeferredBreak()}
-      title={`${breakMinutes(snap.load, snap.settings.breakScale)}分の休憩を始める`}
-      aria-label={`区切りがついた。${breakMinutes(snap.load, snap.settings.breakScale)}分の休憩を始める`}>
-      <Icon name="leaf" /><span>区切りがついた</span>
+      title={`${minutes}分の休憩を始める`}
+      aria-label={`区切りがついたら、${minutes}分休む`}>
+      <Icon name="leaf" /><span className="hi-ready-copy"><small>区切りがついたら</small><strong>{minutes}分休む</strong></span>
     </button>}
     <button ref={pill} className="hi-pill" onClick={onOpen} aria-label="作業モニターを開く" aria-expanded={false}>
       <LoadRing value={snap.load} /><span>計測中</span><strong className="hi-pill-percent">{loadPercent(snap.load)}%</strong><Icon name="chevron" />
@@ -185,7 +186,7 @@ function Detail({ snap, runner, onClose }: { snap: UiSnapshot; runner: Runner; o
       </div>
       <footer className="hi-detail-footer">
         <p className="hi-note">ログから観測した作業要求の参考表示です。</p>
-        <button className="hi-btn hi-primary hi-full" onClick={() => { snap.state.prompt.waitingForUser ? runner.startDeferredBreak() : runner.startManualBreak(''); onClose(); }}>{snap.state.prompt.waitingForUser ? '区切りがついた！ 休憩する' : '休憩する'}</button>
+        <button className="hi-btn hi-primary hi-full" onClick={() => { snap.state.prompt.waitingForUser ? runner.startDeferredBreak() : runner.startManualBreak(''); onClose(); }}>{snap.state.prompt.waitingForUser ? `${breakMinutes(snap.load, snap.settings.breakScale)}分休む` : '休憩する'}</button>
         <p className="hi-footer-hint">疲れの感じ方は、自分の感覚も大切に。</p>
       </footer>
     </aside>

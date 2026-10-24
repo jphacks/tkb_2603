@@ -81,12 +81,14 @@ describe('画像に合わせたUIの操作', () => {
     await publish();
     expect(container.querySelector('.hi-pill-percent')?.textContent).toBe('95%');
     expect(container.firstElementChild?.getAttribute('data-load-level')).toBe('warning');
-    await act(async () => container.querySelector<HTMLButtonElement>('.hi-ready')!.click());
+    expect(container.querySelector('.hi-ready small')?.textContent).toBe('区切りがついたら');
+    expect(container.querySelector('.hi-ready strong')?.textContent).toBe('14分休む');
+    await click('区切りがついたら、14分休む');
     expect(runner.startDeferredBreak).toHaveBeenCalledOnce();
     snap = { ...snap, load: 100 };
     await publish();
     expect(container.firstElementChild?.getAttribute('data-load-level')).toBe('critical');
-    expect(container.querySelector('.hi-ready')?.textContent).toBe('区切りがついた');
+    expect(container.querySelector('.hi-ready strong')?.textContent).toBe('15分休む');
     expect(container.querySelector('.hi-ready')?.getAttribute('title')).toBe('15分の休憩を始める');
   });
 
