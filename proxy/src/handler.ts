@@ -44,7 +44,8 @@ export async function handleRequest(request: Request, env: Env, _ctx?: unknown, 
     stage = 'upstream';
     const started = performance.now();
     const response = await upstream('https://api.anthropic.com/v1/messages', {
-      method: 'POST', redirect: 'error', signal: AbortSignal.timeout(12_000),
+      // Workersはredirect:errorを実装していない。manualで3xxをエラーとして扱い、キーを転送しない。
+      method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(12_000),
       headers: { 'content-type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({
         model: env.ANTHROPIC_MODEL, max_tokens: 1024, system: CLASSIFICATION_SYSTEM,

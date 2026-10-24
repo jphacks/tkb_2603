@@ -24,6 +24,7 @@ describe('公開する分類API', () => {
     expect(sent.model).toBe('claude-test'); expect(sent.max_tokens).toBe(1024);
     expect(sent.thinking).toEqual({ type: 'disabled' });
     expect(sent.output_config.effort).toBe('low');
+    expect(fetcher.mock.calls[0]![1]!.redirect).toBe('manual');
     expect(sent.system).toContain('DECISION_REQUEST');
     expect(sent.messages[0].content.length).toBeLessThan(13000);
     expect(reserve).toHaveBeenCalledOnce();
@@ -65,6 +66,14 @@ describe('公開する分類API', () => {
     const out = await handleRequest(request(), env, undefined, fetcher);
     expect(out.status).toBe(502);
     expect(await out.json()).toEqual({ error: 'upstream_unavailable', upstreamStatus: 401 });
+  });
+  it('リダイレクトは追跡せず、別のURLへキーや本文を転送しない', async () => {
+    const { env } = environment();
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response('', { status: 302, headers: { Location: 'https://another.example' } }));
+    const out = await handleRequest(request(), env, undefined, fetcher);
+    expect(await out.json()).toEqual({ error: 'upstream_unavailable', upstreamStatus: 302 });
+    expect(fetcher).toHaveBeenCalledOnce();
+    expect(fetcher.mock.calls[0]![1]!.redirect).toBe('manual');
   });
   it('クォータ基盤の障害、通信障害、出力打ち切りを固定コードで区別する', async () => {
     const { env, reserve } = environment();

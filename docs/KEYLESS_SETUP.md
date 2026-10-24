@@ -8,7 +8,9 @@ Issue #4。Cloudflare WorkersとSQLite Durable Objectで分類を中継する。
 
 2026-10-25に使用モデルを `claude-haiku-5-5` と確定した。ユーザーの指示により、金額の予算上限は当面設けず、乱用防止の回数制限は維持する。`proxy/wrangler.jsonc` はモデル指定と `CLASSIFICATION_ENABLED: "true"` に更新済みで、次のdeployから有効になる。共有キーでの分類・実サイトの動作確認を終えてからZIPを配布する。
 
-有効化後の初回分類テストは503で失敗した。公開版のモデル・有効化フラグ・回数制限・Secret名は確認済み。Haiku 5.5の既定の思考が1024トークンの出力枠を消費する可能性に対応し、短い抽出用に `thinking: { type: "disabled" }` と `output_config.effort: "low"` を指定した。更新版での再検証が必要。
+有効化後の初回分類テストは503で失敗した。公開版のモデル・有効化フラグ・回数制限・Secret名は確認済み。工程別エラーで上流fetchの呼び出し前後に切り分け、Workersがサポートしない `redirect: "error"` を指定していた実装を修正した。`redirect: "manual"` で3xxをエラーとして扱い、APIキーや本文を別のURLへ転送しない。ローカルHTTP検証でも実際のWorkersのRequestコンストラクターを通す。
+
+Haiku 5.5の既定の思考が出力枠を消費することにも対応し、短い抽出用に `thinking: { type: "disabled" }` と `output_config.effort: "low"` を指定した。
 
 失敗時は固定のエラーコードで工程を判別する。`quota_unavailable`は回数制限基盤、`upstream_unavailable`は上流への通信やHTTPエラー、`classification_truncated`は出力枠の不足、`invalid_classification`は応答形式の不一致。上流HTTPエラーでは数値の`upstreamStatus`だけ追加する。会話・キー・上流エラー本文は公開応答やログに含めない。
 
@@ -135,3 +137,5 @@ npm run build  # dry-run。公開しない
 モデルIDと構造化出力の互換性は [Haiku 5.5移行ガイド](https://platform.claude.com/docs/en/models/haiku-5-5/migration-guide) と上の構造化出力の資料で確認した。
 
 思考の既定値と無効化は [Effort](https://platform.claude.com/docs/en/build-with-claude/effort) を参照。
+
+WorkersのRequestの制約は [Request](https://developers.cloudflare.com/workers/runtime-apis/request/) を参照。
