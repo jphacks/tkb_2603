@@ -140,18 +140,28 @@ export type LogEntry =
   | { type: 'break_cancelled' }
   | { type: 'feedback'; value: 'good' | 'ok' | 'unneeded' }
   | { type: 'observation'; kind: string; detail?: Record<string, number | string | boolean> }
-  | { type: 'classify'; ok: boolean; model: string; ms: number; error?: string }
+  | { type: 'classify'; ok: boolean; model: string; ms: number; error?: string; inputTokens?: number; outputTokens?: number }
   | { type: 'day_reset' };
 
-export type StoredLogEntry = LogEntry & { at: number; minute: number };
+/** site: どのサイトで起きたか(chatgpt・claude・gemini)。古い記録には無い */
+export type StoredLogEntry = LogEntry & { at: number; minute: number; site?: string };
 
 const LOG_CAP = 5000;
 
-export async function appendLog(entry: LogEntry, minute: number): Promise<void> {
-  const got = await browser.storage.local.get(KEYS.log);
-  const log = (got[KEYS.log] as StoredLogEntry[] | undefined) ?? [];
-  log.push({ ...entry, at: Date.now(), minute });
-  await browser.storage.local.set({ [KEYS.log]: log.slice(-LOG_CAP) });
+/** 書き込みを 1 本の鎖で順番に流す(読んでから書くので、同時に来ると片方が消えるため) */
+let logChain: Promise<void> = Promise.resolve();
+
+export function appendLog(entry: LogEntry, minute: number, site?: string): Promise<void> {
+  const at = Date.now();
+  logChain = logChain
+    .then(async () => {
+      const got = await browser.storage.local.get(KEYS.log);
+      const log = (got[KEYS.log] as StoredLogEntry[] | undefined) ?? [];
+      log.push({ ...entry, at, minute, site });
+      await browser.storage.local.set({ [KEYS.log]: log.slice(-LOG_CAP) });
+    })
+    .catch(() => {});
+  return logChain;
 }
 
 export async function loadLog(): Promise<StoredLogEntry[]> {

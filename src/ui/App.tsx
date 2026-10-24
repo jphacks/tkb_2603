@@ -1,4 +1,4 @@
-// ChatGPT に重ねる4状態のUI。計算・保存・休憩の操作は Runner に任せる。
+// AI チャット(ChatGPT・Claude・Gemini)に重ねる4状態のUI。計算・保存・休憩の操作は Runner に任せる。
 import { useEffect, useRef, useState, type KeyboardEvent, type RefObject } from 'react';
 import { breakMinutes, contributionShares } from '../core/model';
 import { ELEMENT_KEYS, ELEMENT_LABELS } from '../core/types';
@@ -69,7 +69,7 @@ function Dock({ snap, runner, pill, onOpen, collapsed, onToggleCollapse }: {
   snap: UiSnapshot; runner: Runner; pill: RefObject<HTMLButtonElement | null>; onOpen: () => void;
   collapsed: boolean; onToggleCollapse: () => void;
 }) {
-  const { ref, bottom } = useDockPosition();
+  const { ref, bottom } = useDockPosition(() => runner.composerContainer?.() ?? null);
   const minutes = breakMinutes(snap.load, snap.settings.breakScale);
   const canCollapse = loadPercent(snap.load) < 80;
   const compact = canCollapse && collapsed;
@@ -91,12 +91,13 @@ function Dock({ snap, runner, pill, onOpen, collapsed, onToggleCollapse }: {
   </div>;
 }
 
-/** ChatGPTの明示的なテーマを優先。指定がなければOS設定に従う。 */
+/** ページの明示的なテーマを優先。指定がなければOS設定に従う。
+ *  ChatGPT は class/data-theme、Claude は data-mode、Gemini は dark-theme のクラスを見る(Claude・Gemini は未確認の候補) */
 function usePageTheme(): 'light' | 'dark' {
   const read = () => {
     for (const element of [document.documentElement, document.body]) {
-      if (element?.classList.contains('dark') || element?.getAttribute('data-theme') === 'dark') return 'dark';
-      if (element?.classList.contains('light') || element?.getAttribute('data-theme') === 'light') return 'light';
+      if (element?.classList.contains('dark') || element?.classList.contains('dark-theme') || element?.getAttribute('data-theme') === 'dark' || element?.getAttribute('data-mode') === 'dark') return 'dark';
+      if (element?.classList.contains('light') || element?.classList.contains('light-theme') || element?.getAttribute('data-theme') === 'light' || element?.getAttribute('data-mode') === 'light') return 'light';
       if (element?.style.colorScheme === 'dark') return 'dark';
       if (element?.style.colorScheme === 'light') return 'light';
     }
@@ -107,7 +108,7 @@ function usePageTheme(): 'light' | 'dark' {
     const update = () => setTheme(read());
     const observer = new MutationObserver(update);
     for (const element of [document.documentElement, document.body]) {
-      if (element) observer.observe(element, { attributes: true, attributeFilter: ['class', 'data-theme', 'style'] });
+      if (element) observer.observe(element, { attributes: true, attributeFilter: ['class', 'data-theme', 'data-mode', 'style'] });
     }
     const media = window.matchMedia('(prefers-color-scheme: dark)');
     media.addEventListener('change', update);
@@ -213,6 +214,7 @@ function Diagnostics({ snap }: { snap: UiSnapshot }) {
   const d = snap.diagnostics;
   return (
     <div className="hi-diag">
+      <div>サイト: {d.site}</div>
       <div>回答 {d.assistantCount} / 送信 {d.userCount} / 生成中 {d.generating ? 'はい' : 'いいえ'}</div>
       <div>最後の回答: {d.lastResponseChars} 文字「{d.lastResponseHead}…」</div>
       <div>終わりの検出: {d.completionMethod ?? 'まだ'}</div>

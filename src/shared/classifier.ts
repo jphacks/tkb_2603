@@ -2,7 +2,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { ClassifyResult } from './messages';
 
-const SYSTEM = `You classify one developer–AI exchange from ChatGPT. Use ONLY the definitions below.
+const SYSTEM = `You classify one developer–AI exchange from an AI chat service (ChatGPT, Claude, or Gemini). Use ONLY the definitions below.
 Do not infer events that are not explicitly supported by the text.
 
 DECISION_REQUEST: each independent point where the ASSISTANT asks the user to choose, approve, or decide
@@ -74,7 +74,7 @@ export async function classifyExchange(opts: {
   userText: string;
   assistantText: string;
   previousTask: string;
-}): Promise<ClassifyResult> {
+}): Promise<{ result: ClassifyResult; inputTokens: number; outputTokens: number }> {
   const client = new Anthropic({
     apiKey: opts.apiKey,
     // 拡張(自分たちだけで使う)から直接呼ぶ。配るときはサーバー経由に変える
@@ -110,5 +110,9 @@ export async function classifyExchange(opts: {
   if (response.stop_reason === 'max_tokens') throw new Error('truncated');
   const text = response.content.find((b) => b.type === 'text');
   if (!text || text.type !== 'text') throw new Error('no text block');
-  return JSON.parse(text.text) as ClassifyResult;
+  return {
+    result: JSON.parse(text.text) as ClassifyResult,
+    inputTokens: response.usage.input_tokens,
+    outputTokens: response.usage.output_tokens,
+  };
 }

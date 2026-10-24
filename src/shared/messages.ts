@@ -15,7 +15,7 @@ export interface ClassifyRequest {
 }
 
 export type ClassifyResponse =
-  | { ok: true; result: ClassifyResult; model: string; ms: number }
+  | { ok: true; result: ClassifyResult; model: string; ms: number; inputTokens: number; outputTokens: number }
   | { ok: false; error: string; model: string; ms: number };
 
 export interface OpenOptionsRequest {

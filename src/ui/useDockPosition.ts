@@ -1,8 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react';
-import { findComposerContainer } from '../content/chatgpt';
 
 /** 入力欄の伸縮や会話の切替に追従し、ボタンを入力欄の16px上に置く。 */
-export function useDockPosition() {
+export function useDockPosition(findComposerContainer: () => HTMLElement | null) {
   const ref = useRef<HTMLDivElement>(null);
   const [bottom, setBottom] = useState(144);
   useLayoutEffect(() => {

@@ -11,8 +11,15 @@ async function runClassify(userText: string, assistantText: string, previousTask
   }
   if (!settings.apiKey) return { ok: false, error: 'no_api_key', model: settings.model, ms: 0 };
   try {
-    const result = await classifyExchange({ apiKey: settings.apiKey, model: settings.model, userText, assistantText, previousTask });
-    return { ok: true, result, model: settings.model, ms: Math.round(performance.now() - started) };
+    const out = await classifyExchange({ apiKey: settings.apiKey, model: settings.model, userText, assistantText, previousTask });
+    return {
+      ok: true,
+      result: out.result,
+      inputTokens: out.inputTokens,
+      outputTokens: out.outputTokens,
+      model: settings.model,
+      ms: Math.round(performance.now() - started),
+    };
   } catch (e) {
     return {
       ok: false,

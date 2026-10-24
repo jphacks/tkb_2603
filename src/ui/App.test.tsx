@@ -2,7 +2,9 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ChatObserver } from '../content/observer';
 import type { Runner, UiSnapshot } from '../content/runner';
+import { CHATGPT } from '../content/sites';
 import { initialState } from '../core/types';
 import { DEFAULT_SETTINGS } from '../shared/settings';
 import { App } from './App';
@@ -17,6 +19,8 @@ const runner = {
   respondToPrompt: vi.fn(), startManualBreak: vi.fn(), startDeferredBreak: vi.fn(), openOptions: vi.fn(),
   setMemo: vi.fn(), askEndBreak: vi.fn(), cancelEndBreak: vi.fn(), endBreakEarly: vi.fn(),
   sendFeedback: vi.fn(), dismissFinished: vi.fn(),
+  // 位置合わせは本物の読み取り(ChatGPT の定義)で入力欄の外枠を探す
+  composerContainer: () => new ChatObserver(CHATGPT, { onPromptSent() {}, onResponseDone() {}, onErrorPaste() {}, onConversationSwitch() {}, onActivity() {} }).composerContainer(),
 };
 const button = (label: string) => {
   const found = [...container.querySelectorAll('button')].find((element) => element.getAttribute('aria-label') === label || element.textContent === label);
@@ -39,7 +43,7 @@ beforeEach(async () => {
     state: initialState(), settings: { ...settings, hasApiKey: false }, load: 0,
     clock: { minute: 0, sampledAt: Date.now() }, prompt: null, finishedBreak: null,
     confirmEndBreak: false, lastClassify: null,
-    diagnostics: { matched: {}, assistantCount: 0, userCount: 0, generating: false, lastResponseChars: 0, lastResponseHead: '', completionMethod: null },
+    diagnostics: { site: 'chatgpt', matched: {}, assistantCount: 0, userCount: 0, generating: false, lastResponseChars: 0, lastResponseHead: '', completionMethod: null },
   };
   container = document.createElement('div');
   document.body.append(container);

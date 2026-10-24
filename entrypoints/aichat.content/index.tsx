@@ -1,10 +1,11 @@
 import ReactDOM from 'react-dom/client';
 import { Runner } from '../../src/content/runner';
+import { SITE_MATCHES } from '../../src/content/sites';
 import { App } from '../../src/ui/App';
 import '../../src/ui/style.css';
 
 export default defineContentScript({
-  matches: ['https://chatgpt.com/*'],
+  matches: SITE_MATCHES,
   cssInjectionMode: 'ui',
   async main(ctx) {
     const runner = new Runner();
@@ -14,7 +15,7 @@ export default defineContentScript({
       position: 'inline',
       anchor: 'body',
       append: 'last',
-      // ChatGPT のショートカットに入力が奪われないようにする
+      // サイトのショートカットに入力が奪われないようにする
       isolateEvents: ['keydown', 'keyup', 'keypress'],
       onMount(container) {
         const root = ReactDOM.createRoot(container);
