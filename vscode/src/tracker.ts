@@ -13,7 +13,7 @@ import {
   initialState,
 } from '../../src/core/types';
 // 休憩の文は Chrome 版と同じものを使う(どちらも純粋な定数・関数)
-import { endCopy, STRETCHES } from '../../src/ui/copy';
+import { endCopy, promptCopy, STRETCHES } from '../../src/ui/copy';
 
 /** これ以上の文字数が 1 回の変更で入ったら「まとまった挿入」(読む量)とみなす。それ未満は入力 */
 export const BULK_MIN_CHARS = 100;
@@ -67,17 +67,10 @@ export interface FinishedBreak {
   completed: boolean;
 }
 
-const REASONS: Record<ElementKey | 'default', string> = {
-  default: '作業が続いています。',
-  reading: 'まとまった量のコードや文章が入る作業が続いています。',
-  decision: '選択や判断が続いています。',
-  verification: 'コマンドやテストの失敗が続いています。',
-  switching: 'ファイルの切り替えが続いています。',
-  time: 'まとまった時間、作業が続いています。',
-};
-
-export function promptMessage(top: ElementKey | null): string {
-  return `ひと休みしませんか。${REASONS[top ?? 'default']}`;
+/** 提案の通知の文(Chrome 版の提案と同じ文) */
+export function promptMessage(top: ElementKey | null, uf: number): string {
+  const c = promptCopy(top, uf >= HIGH_UF);
+  return `${c.title}。${c.body}`;
 }
 
 /** 休憩中に出す、ストレッチの文 */
@@ -101,6 +94,8 @@ export class Tracker {
   breakTopAtStart: ElementKey | null = null;
   /** ストレッチを選ぶ乱数(テストで差し替える) */
   random: () => number = Math.random;
+  /** 最後に出した提案の番号。古い通知のボタンを後から押しても受け付けないため */
+  latestPromptId = 0;
   /** 出した提案に、まだ答えていない間の「出す前の提案の状態」。答えが来たらこれに戻してから操作を当てる */
   private pendingPrompt: PromptState | null = null;
   private lastTypingAt = -Infinity;
@@ -203,10 +198,13 @@ export class Tracker {
     return b ? Math.max(0, b.plannedMin - (this.state.minute - b.startedAt)) : null;
   }
 
-  /** 提案への答え。undefined(押さずに消えた)と「今回は不要」は、出した時の扱いのまま */
-  respondToPrompt(action: PromptAction | undefined, memo = ''): boolean {
+  /**
+   * 提案への答え。undefined(押さずに消えた)と「今回は不要」は、出した時の扱いのまま。
+   * id が最後に出した提案の番号でなければ(古い通知のボタン)、何もしない
+   */
+  respondToPrompt(id: number, action: PromptAction | undefined, memo = ''): boolean {
     const previous = this.pendingPrompt;
-    if (!previous) return false;
+    if (!previous || id !== this.latestPromptId) return false;
     this.pendingPrompt = null;
     if (!action || action === 'decline' || this.state.breakState) return true;
     this.state = { ...this.state, prompt: previous };
@@ -267,12 +265,12 @@ export class Tracker {
    * 今、提案を出すか。出すときは文を返す。VS Code の通知は押さずに消えても答えが返らないことがあるので、
    * 出した時点で「今回は不要」と同じく次の提案まで間を空けておき、ボタンの答えが来たら respondToPrompt で上書きする
    */
-  checkPrompt(nowMs: number, info: GateInfo): string | null {
+  checkPrompt(nowMs: number, info: GateInfo): { id: number; message: string } | null {
     if (info.taskRunning || info.debugging) return null;
     if (!shouldPrompt(this.state, this.params, this.gateContext(nowMs, info.focused))) return null;
-    const message = promptMessage(topContributor(this.state));
+    const message = promptMessage(topContributor(this.state), this.state.uf);
     this.pendingPrompt = structuredClone(this.state.prompt);
     this.state = applyPromptAction(this.state, 'decline');
-    return message;
+    return { id: ++this.latestPromptId, message };
   }
 }

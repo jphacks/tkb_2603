@@ -98,10 +98,10 @@ it('失敗が続くと器がたまり、区切りで 1 回だけ提案して、�
     t.tick();
     now += 60_000;
     const m = t.checkPrompt(now, idle);
-    if (m) prompts.push(m);
+    if (m) prompts.push(m.message);
   }
   expect(load(t.state)).toBeGreaterThan(20);
-  expect(prompts[0]).toContain('コマンドやテストの失敗');
+  expect(prompts[0]).toBe('ひと息、休憩しませんか。確認や指示が続いています。');
   // 最初の提案の後は「今回は不要」と同じく 15 分空く
   expect(prompts.length).toBeGreaterThanOrEqual(1);
   expect(prompts.length).toBeLessThanOrEqual(2);
@@ -145,7 +145,7 @@ it('「今休む」で休憩を始め、休憩中だけ器が下がり、予定�
   const t = prompted();
   t.random = () => 0.5; // 肩回し
   const before = load(t.state);
-  expect(t.respondToPrompt('now', 'テストを確認')).toBe(true);
+  expect(t.respondToPrompt(t.latestPromptId, 'now', 'テストを確認')).toBe(true);
   const b = t.state.breakState!;
   expect(b.memo).toBe('テストを確認');
   expect(b.stretch).toBe('shoulder');
@@ -166,7 +166,7 @@ it('「今休む」で休憩を始め、休憩中だけ器が下がり、予定�
 
 it('「次の区切りで」は自分で始めるまで待ち、「今回は不要」と押さずに消えたのは出した時の扱いのまま', () => {
   const later = prompted();
-  later.respondToPrompt('next_breakpoint');
+  later.respondToPrompt(later.latestPromptId, 'next_breakpoint');
   expect(later.state.prompt.waitingForUser).toBe(true);
   expect(later.state.breakState).toBeNull();
   expect(later.startDeferredBreak('')).toBe(true);
@@ -175,11 +175,11 @@ it('「次の区切りで」は自分で始めるまで待ち、「今回は不�
   for (const action of ['decline', undefined] as const) {
     const t = prompted();
     const prompt = structuredClone(t.state.prompt);
-    expect(t.respondToPrompt(action)).toBe(true);
+    expect(t.respondToPrompt(t.latestPromptId, action)).toBe(true);
     expect(t.state.prompt).toEqual(prompt);
     expect(t.state.breakState).toBeNull();
     // 2 回目の答えは無視する
-    expect(t.respondToPrompt('now')).toBe(false);
+    expect(t.respondToPrompt(t.latestPromptId, 'now')).toBe(false);
   }
 });
 
@@ -217,4 +217,30 @@ it('休憩中に閉じて開き直すと、閉じていた間も休憩のタイ�
   expect(reopened.breakRemainingMin()).toBe(5);
   expect(reopened.catchUp(30)).toMatchObject({ memo: '続き', completed: true });
   expect(reopened.state.breakState).toBeNull();
+});
+
+it('古い通知のボタンを後から押しても、何もしない(最後の提案のボタンだけ受け付ける)', () => {
+  const t = prompted();
+  const first = t.latestPromptId;
+  // 1 回目に答えないまま 2 回目の提案が出る
+  for (let min = 0; min < 60 && t.latestPromptId === first; min++) {
+    t.onCommandEnd(1, 0);
+    t.tick();
+    t.checkPrompt(1e9 + min * 60_000, idle);
+  }
+  expect(t.latestPromptId).toBe(first + 1);
+  const prompt = structuredClone(t.state.prompt);
+  expect(t.respondToPrompt(first, 'now', '古い')).toBe(false);
+  expect(t.state.breakState).toBeNull();
+  expect(t.state.prompt).toEqual(prompt);
+  expect(t.respondToPrompt(first + 1, 'now', '新しい')).toBe(true);
+  expect(t.state.breakState?.memo).toBe('新しい');
+});
+
+it('今日の積み重ねが多いと、提案の文が変わる(Chrome 版と同じ)', () => {
+  const t = prompted();
+  t.state.uf = 30;
+  t.state.prompt.notBefore = 0;
+  t.state.prompt.declineStreak = 0;
+  expect(t.checkPrompt(1e9, idle)?.message).toBe('ひと息、休憩しませんか。今日は作業が積み重なっています。');
 });

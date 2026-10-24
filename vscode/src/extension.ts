@@ -51,8 +51,8 @@ function paramsFrom(s: Settings): ModelParams {
 export interface HitoikiApi {
   tracker: Tracker;
   promptsShown(): number;
-  /** 提案の通知のボタンを押したのと同じ(「今休む」のメモ入力欄は飛ばして memo を使う) */
-  choosePrompt(label: string | undefined, memo?: string): Promise<void>;
+  /** 提案の通知のボタンを押したのと同じ(「今休む」のメモ入力欄は飛ばして memo を使う。id を省くと最後の提案) */
+  choosePrompt(label: string | undefined, memo?: string, id?: number): Promise<void>;
   welcomes(): string[];
 }
 
@@ -122,10 +122,12 @@ export function activate(context: vscode.ExtensionContext): HitoikiApi {
       placeHolder: '例:テスト結果を確認する',
     })) ?? '';
 
-  const choosePrompt = async (label: string | undefined, memo?: string) => {
+  const choosePrompt = async (label: string | undefined, memo?: string, id = tracker.latestPromptId) => {
+    // 古い通知のボタンは、メモを聞く前に断る
+    if (id !== tracker.latestPromptId) return;
     const action = label ? PROMPT_BUTTONS[label] : undefined;
     const m = action === 'now' ? (memo ?? (await askMemo())) : '';
-    if (!tracker.respondToPrompt(action, m)) return;
+    if (!tracker.respondToPrompt(id, action, m)) return;
     if (action === 'now') breakStarted();
     if (action === 'next_breakpoint') void vscode.window.showInformationMessage(SNOOZE_COPY.next_breakpoint);
     render();
@@ -150,16 +152,18 @@ export function activate(context: vscode.ExtensionContext): HitoikiApi {
   restartTick();
 
   const gateTimer = setInterval(() => {
-    const message = tracker.checkPrompt(Date.now(), {
+    const prompt = tracker.checkPrompt(Date.now(), {
       // tsc --watch・npm run dev のような終わらないタスクは、実行中に数えない
       taskRunning: vscode.tasks.taskExecutions.some((e) => !e.task.isBackground),
       focused: vscode.window.state.focused,
       debugging: vscode.debug.activeDebugSession !== undefined,
     });
-    if (message) {
+    if (prompt) {
       promptsShown++;
       void save();
-      void vscode.window.showInformationMessage(message, ...Object.keys(PROMPT_BUTTONS)).then((label) => choosePrompt(label));
+      void vscode.window
+        .showInformationMessage(prompt.message, ...Object.keys(PROMPT_BUTTONS))
+        .then((label) => choosePrompt(label, undefined, prompt.id));
     }
     render(); // 休憩の残り時間を秒で動かす
   }, GATE_INTERVAL_MS);
