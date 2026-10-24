@@ -2,6 +2,12 @@
 
 Issue #4。Cloudflare WorkersとSQLite Durable Objectで分類を中継する。実装とローカルの確認は済んでいるが、公開URL・使用モデル・運用上限・実際の共有キーでの確認は公開担当者の操作で確定する。
 
+## 公開準備の状況
+
+2026-10-24に `https://hitoiki-proxy.gaku-fujio.workers.dev/health` が200で `{"ok":true,"enabled":false}` を返すことを確認した。Workerの公開・共有キーの登録は公開担当者が実施済み。拡張の接続先は `.env.example` に記載し、ローカルの `.env` に設定してビルドする。
+
+使用モデルと運用上限は確認中のため、分類は停止状態を維持する。この段階のZIPは接続先を設定した準備版であり、共有キーでの分類・実サイトの動作確認を終えてから配布する。
+
 ## 設定の初期状態
 
 - `proxy/wrangler.jsonc` の `CLASSIFICATION_ENABLED` は `false`、`ANTHROPIC_MODEL` は空欄。公開しても分類APIは503を返し、Anthropicを呼ばない。
