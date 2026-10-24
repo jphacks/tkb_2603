@@ -61,7 +61,7 @@ export type Observation =
   | { kind: 'response_done'; t: number; chars: number; enWords: number }
   | { kind: 'activity'; t: number }
   | { kind: 'decision'; t: number; count: number }
-  | { kind: 'verification'; t: number; count: number; source: 'paste' | 'llm' }
+  | { kind: 'verification'; t: number; count: number; source: 'paste' | 'llm' | 'exit_code' }
   | { kind: 'switch'; t: number; source: 'url' | 'llm' };
 
 export type StretchId = 'reach' | 'shoulder' | 'sway';
