@@ -22,6 +22,15 @@ it('30 分ごとの時刻に、生成中・入力中・読んでいる最中だ�
   expect(c).toMatchObject({ ticks: 2, generating: 1, typing: 1, reading: 1, anyBusy: 2 });
 });
 
+it('対になっていない区間は捨て、そのことを出力に書く', () => {
+  const m = 60_000;
+  const o = (min: number, kind: string) => ({ type: 'observation' as const, kind, at: min * m, minute: min });
+  // 30 分の時点で typing_start / generation_start だけが残っている
+  const log = [o(0, 'prompt_sent'), o(25, 'typing_start'), o(28, 'generation_start'), o(40, 'prompt_sent')];
+  expect(compareTimer(log)).toMatchObject({ ticks: 1, typing: 0, generating: 0 });
+  expect(report(log)).toContain('対になっていない区間');
+});
+
 it('入力・生成の記録が無い古いログでも動く', () => {
   const log = load('sample-log-old.json');
   expect(compareTimer(log)).toMatchObject({ ticks: 2, generating: 0, typing: 0, reading: 1, hasTyping: false });

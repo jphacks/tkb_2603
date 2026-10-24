@@ -317,6 +317,8 @@ export function report(log: StoredLogEntry[]): string {
     `## ${TIMER_INTERVAL_MIN} 分ごとのタイマーだったら`,
     '',
     `記録が ${SESSION_GAP_MIN} 分以上途切れたところで回を分け、各回の初めから ${TIMER_INTERVAL_MIN} 分ごとに鳴らしたとする。`,
+    '対になっていない区間(typing_start の後に typing_end が無い、generation_start の後に response_done が無い)は捨てて数えない。' +
+      'タブをまたぐと記録を取りこぼすことがあるため。',
     '',
     table([
       ['鳴った回数', String(c.ticks)],
