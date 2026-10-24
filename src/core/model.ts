@@ -6,11 +6,12 @@ import {
   type EngineState,
   type ModelParams,
   type Observation,
+  type StretchId,
   zeroElements,
 } from './types';
 
 export function load(state: EngineState): number {
-  return Math.min(100, state.rf + state.uf);
+  return state.rf + state.uf;
 }
 
 /** 読む残り時間(分)を回答の量から求める。日本語 653 字/分、英語 238 語/分(DR04) */
@@ -114,9 +115,9 @@ export function tick(state: EngineState, p: ModelParams): TickResult {
     values = elementValues(s, p);
     const e = intensity(values);
     const gain = p.g * e;
-    // RF の上限は 100 − UF(断り続けても膨らまない)
-    s.uf = Math.min(100, s.uf + p.rho * gain);
-    s.rf = Math.min(100 - s.uf, s.rf + (1 - p.rho) * gain);
+    // 100%を超えても蓄積を続ける。バーの描画だけを100%で止める。
+    s.uf += p.rho * gain;
+    s.rf += (1 - p.rho) * gain;
     for (const k of Object.keys(values) as (keyof ElementValues)[]) {
       added[k] = (p.g * values[k]) / 5;
       s.contribSinceBreak[k] += added[k];
@@ -130,6 +131,7 @@ export function tick(state: EngineState, p: ModelParams): TickResult {
     s.uf = 0;
     s.contribSinceBreak = zeroElements();
     s.lastWorkAt = null;
+    s.prompt = { notBefore: 0, declineStreak: 0, waitingForUser: false };
   }
 
   s.history.push({ t: s.minute, load: load(s) });
@@ -143,9 +145,10 @@ export function breakMinutes(loadValue: number, scale = 1): number {
   return Math.max(1, Math.min(15, Math.round(base * scale)));
 }
 
-export function startBreak(state: EngineState, plannedMin: number, memo: string): EngineState {
+export function startBreak(state: EngineState, plannedMin: number, memo: string, stretch: StretchId = 'reach'): EngineState {
   const s = structuredClone(state);
-  s.breakState = { startedAt: s.minute, plannedMin, memo };
+  s.breakState = { startedAt: s.minute, plannedMin, memo, stretch };
+  s.prompt.waitingForUser = false;
   return s;
 }
 
@@ -155,6 +158,7 @@ export function endBreak(state: EngineState, markActive = true): EngineState {
   s.breakState = null;
   s.contribSinceBreak = zeroElements();
   s.prompt.declineStreak = 0;
+  s.prompt.waitingForUser = false;
   if (markActive) s.lastActivityAt = s.minute;
   return s;
 }

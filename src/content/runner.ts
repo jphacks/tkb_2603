@@ -3,7 +3,6 @@
 import { applyPromptAction, type GateContext, type PromptAction, shouldPrompt } from '../core/gate';
 import {
   breakMinutes,
-  cancelBreak,
   endBreak,
   load,
   observe,
@@ -12,7 +11,7 @@ import {
   tick,
   topContributor,
 } from '../core/model';
-import { type ElementKey, type EngineState, initialState, type Observation } from '../core/types';
+import { type ElementKey, type EngineState, initialState, type Observation, type StretchId } from '../core/types';
 import type { ClassifyResponse, ClassifyRequest } from '../shared/messages';
 import {
   appendLog,
@@ -44,6 +43,8 @@ export interface FinishedBreak {
 
 export interface UiSnapshot {
   state: EngineState;
+  /** 秒表示用の、計算時計と実時刻の対応 */
+  clock: { minute: number; sampledAt: number };
   /** API キーは UI に渡さない(有無だけ) */
   settings: Omit<Settings, 'apiKey'> & { hasApiKey: boolean };
   load: number;
@@ -64,7 +65,6 @@ export class Runner {
   private tickTimer: number | null = null;
   private gateTimer: number | null = null;
   private prompt: PromptInfo | null = null;
-  private waitingForBreakpoint = false;
   private needSinceReal: number | null = null;
   private finishedBreak: FinishedBreak | null = null;
   private confirmEndBreak = false;
@@ -128,9 +128,8 @@ export class Runner {
       this.state = { ...saved.state, llmAvailable: this.state.llmAvailable };
       if (saved.lastTickReal) this.lastTickReal = saved.lastTickReal;
       // ほかのタブで休憩を始めた・提案に答えた → このタブに残った古い提案を消す
-      if (saved.state.breakState || saved.state.prompt.notBefore !== before.prompt.notBefore) {
+      if (saved.state.breakState || saved.state.prompt.notBefore !== before.prompt.notBefore || saved.state.prompt.waitingForUser !== before.prompt.waitingForUser) {
         this.prompt = null;
-        this.waitingForBreakpoint = false;
       }
       this.emit();
     });
@@ -151,8 +150,13 @@ export class Runner {
   }
 
   private snapshot(): UiSnapshot {
+    const sampledAt = Date.now();
     return {
       state: this.state,
+      clock: {
+        minute: this.state.minute + Math.max(0, ((sampledAt - this.lastTickReal) / 60_000) * this.settings.speed),
+        sampledAt,
+      },
       settings: (({ apiKey, ...rest }) => ({ ...rest, hasApiKey: !!apiKey }))(this.settings),
       load: load(this.state),
       prompt: this.prompt,
@@ -217,7 +221,10 @@ export class Runner {
   private advance(present: boolean): void {
     const res = tick(this.state, paramsFrom(this.settings));
     this.state = res.state;
-    if (res.dayReset) void this.log({ type: 'day_reset' });
+    if (res.dayReset) {
+      this.prompt = null;
+      void this.log({ type: 'day_reset' });
+    }
     const b = this.state.breakState;
     if (b && this.state.minute - b.startedAt >= b.plannedMin) this.finishBreak(true, present);
   }
@@ -270,13 +277,13 @@ export class Runner {
   private checkGate(): void {
     // 提案を出すのは表のタブだけ(タブの数だけ提案・記録が出ないように)
     if (!this.isLeader()) return;
-    if (!this.settings.enabled || this.prompt || this.state.breakState || this.finishedBreak) return;
+    if (!this.settings.enabled || this.prompt || this.state.breakState || this.finishedBreak || this.state.prompt.waitingForUser) return;
     const p = paramsFrom(this.settings);
     const ctx = this.gateContext();
     const needNow = load(this.state) >= p.threshold && this.state.minute >= this.state.prompt.notBefore;
     if (needNow && this.needSinceReal === null) this.needSinceReal = Date.now();
     if (!needNow) this.needSinceReal = null;
-    if (!shouldPrompt(this.state, p, this.settings.mode, ctx, this.waitingForBreakpoint)) return;
+    if (!shouldPrompt(this.state, p, ctx)) return;
 
     const l = load(this.state);
     const top = topContributor(this.state);
@@ -284,39 +291,42 @@ export class Runner {
     this.prompt = { load: l, minutes, top };
     const waitedSec = this.needSinceReal === null ? null : Math.round((Date.now() - this.needSinceReal) / 1000);
     void this.log({ type: 'prompt_shown', load: Math.round(l), mode: this.settings.mode, waitedSec, top });
-    this.waitingForBreakpoint = false;
-    if (this.settings.mode === 'auto_timer') {
-      // 自動タイマー: 通知と同時に休憩を始める(メモは休憩中に書ける)
-      this.beginBreak(minutes, '');
-    }
     this.emit();
   }
 
   // ---- 画面からの操作 ----
 
   respondToPrompt(action: PromptAction, memo = ''): void {
+    this.onTick();
     if (!this.prompt) return;
     void this.log({ type: 'prompt_action', action });
     if (action === 'now') {
-      if (!this.state.breakState) this.beginBreak(this.prompt.minutes, memo);
+      if (!this.state.breakState) this.beginBreak(breakMinutes(load(this.state), this.settings.breakScale), memo);
     } else {
-      // 自動タイマーで断ったとき: 休憩を取り消す(「おかえり」を出さない。断った回数は保つ)
-      if (this.state.breakState) {
-        void this.log({ type: 'break_cancelled' });
-        this.state = cancelBreak(this.state);
-      }
       this.state = applyPromptAction(this.state, action);
-      this.waitingForBreakpoint = action === 'next_breakpoint';
     }
     this.prompt = null;
+    this.needSinceReal = null;
     this.save();
     this.emit();
   }
 
   /** 器が低くても自分で休憩を始める */
   startManualBreak(memo: string): void {
+    if (!this.settings.enabled || this.state.breakState) return;
+    this.onTick();
     this.prompt = null;
     this.beginBreak(breakMinutes(Math.max(80, load(this.state)), this.settings.breakScale), memo);
+  }
+
+  /** 待っている間は計測を継続。押した時点の器に合わせて休憩を始める。 */
+  startDeferredBreak(): void {
+    if (!this.settings.enabled || !this.state.prompt.waitingForUser || this.state.breakState) return;
+    this.onTick();
+    if (!this.state.prompt.waitingForUser) return;
+    void this.log({ type: 'prompt_action', action: 'now' });
+    this.prompt = null;
+    this.beginBreak(breakMinutes(load(this.state), this.settings.breakScale), '');
   }
 
   setMemo(memo: string): void {
@@ -329,7 +339,9 @@ export class Runner {
   private beginBreak(minutes: number, memo: string): void {
     this.breakTopAtStart = topContributor(this.state);
     void this.log({ type: 'break_start', plannedMin: minutes, hasMemo: memo.length > 0, load: Math.round(load(this.state)) });
-    this.state = startBreak(this.state, minutes, memo);
+    const stretches: StretchId[] = ['reach', 'shoulder', 'sway'];
+    const stretch = stretches[Math.floor(Math.random() * stretches.length)]!;
+    this.state = startBreak(this.state, minutes, memo, stretch);
     this.confirmEndBreak = false;
     this.save();
     this.emit();

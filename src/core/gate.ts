@@ -2,6 +2,7 @@
 import { load } from './model';
 import type { EngineState, ModelParams } from './types';
 
+/** 過去のログの読み取り用。現在はユーザーが開始する通知方式のみ。 */
 export type NotifyMode = 'notify' | 'auto_timer';
 
 /** 今、声をかけてよいかの材料(画面から取る。実時間の秒) */
@@ -19,6 +20,7 @@ export interface GateContext {
 /** 休憩が必要か: 器がしきい値を超えていて、休憩中でなく、提案を止めている時間でもない */
 export function needsBreak(state: EngineState, p: ModelParams): boolean {
   if (state.breakState) return false;
+  if (state.prompt.waitingForUser) return false;
   if (state.minute < state.prompt.notBefore) return false;
   return load(state) >= p.threshold;
 }
@@ -31,34 +33,22 @@ export function isBreakpoint(state: EngineState, ctx: GateContext): boolean {
   return true;
 }
 
-/**
- * 提案を出すか。
- * - 通知モード: 必要 かつ 区切り
- * - 自動タイマーモード: 必要になった時点で出す。ただし「次の区切りで」を選んだ後は区切りまで待つ(決定)
- */
-export function shouldPrompt(
-  state: EngineState,
-  p: ModelParams,
-  mode: NotifyMode,
-  ctx: GateContext,
-  waitingForBreakpoint: boolean,
-): boolean {
-  if (!needsBreak(state, p)) return false;
-  if (mode === 'auto_timer' && !waitingForBreakpoint) return true;
-  return isBreakpoint(state, ctx);
+/** 必要かつ区切りで通知。休憩の開始は必ずユーザーの操作で行う。 */
+export function shouldPrompt(state: EngineState, p: ModelParams, ctx: GateContext): boolean {
+  return needsBreak(state, p) && isBreakpoint(state, ctx);
 }
 
 export type PromptAction = 'now' | 'next_breakpoint' | 'decline';
 
-/** 「次の区切りで」は最短 5 分あける。「今回は不要」は断るたびに 15 → 30 → 60 分(仮置き) */
-export const NEXT_BREAKPOINT_MIN = 5;
+/** 区切りはユーザーが開始ボタンで知らせる。旧「今回は不要」の間隔は保存データとの互換のため残す */
 export const DECLINE_STEPS_MIN = [15, 30, 60];
 
 export function applyPromptAction(state: EngineState, action: PromptAction): EngineState {
   const s = structuredClone(state);
   if (action === 'next_breakpoint') {
-    s.prompt.notBefore = s.minute + NEXT_BREAKPOINT_MIN;
+    s.prompt.waitingForUser = true;
   } else if (action === 'decline') {
+    s.prompt.waitingForUser = false;
     const step = DECLINE_STEPS_MIN[Math.min(s.prompt.declineStreak, DECLINE_STEPS_MIN.length - 1)] ?? 60;
     s.prompt.notBefore = s.minute + step;
     s.prompt.declineStreak += 1;

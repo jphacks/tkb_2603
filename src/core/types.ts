@@ -64,6 +64,8 @@ export type Observation =
   | { kind: 'verification'; t: number; count: number; source: 'paste' | 'llm' }
   | { kind: 'switch'; t: number; source: 'url' | 'llm' };
 
+export type StretchId = 'reach' | 'shoulder' | 'sway';
+
 export interface BreakState {
   /** 休憩を始めた時刻(計算上の分) */
   startedAt: number;
@@ -71,9 +73,13 @@ export interface BreakState {
   plannedMin: number;
   /** 戻ったら何をするかのメモ */
   memo: string;
+  /** この休憩で案内する運動。旧データには無い */
+  stretch?: StretchId;
 }
 
 export interface PromptState {
+  /** 「区切りがついたら休む」を選び、開始ボタンを押すのを待っている。旧データは未設定 */
+  waitingForUser?: boolean;
   /** これより前は提案しない(計算上の分) */
   notBefore: number;
   /** 「今回は不要」を続けて押した回数 */
@@ -120,7 +126,7 @@ export function initialState(): EngineState {
     contribSinceBreak: zeroElements(),
     history: [],
     breakState: null,
-    prompt: { notBefore: 0, declineStreak: 0 },
+    prompt: { notBefore: 0, declineStreak: 0, waitingForUser: false },
     llmAvailable: false,
   };
 }
