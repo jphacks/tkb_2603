@@ -1,6 +1,9 @@
 # main への push と PR で、Chrome 拡張と VS Code 拡張の型・テスト・ビルドを確かめる
 name: test
 
+permissions:
+  contents: read
+
 on:
   push:
     branches: [main]
@@ -31,8 +34,11 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: vscode/package-lock.json
-      # vscode/ は ../src/core を読むので、ルートの依存も入れる
+          cache-dependency-path: |
+            package-lock.json
+            vscode/package-lock.json
+      # vscode/ の vitest・esbuild が ../src/core を変換するとき、ルートの tsconfig.json(.wxt/tsconfig.json を継ぐ)を読む。
+      # .wxt/ はルートの npm ci の postinstall(wxt prepare)で作られるので、先にルートも入れる
       - run: npm ci
         working-directory: .
       - run: npm ci
