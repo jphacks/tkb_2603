@@ -6,6 +6,7 @@ cd "$(dirname "$0")/.."
 out=dist-release
 rm -rf "$out" && mkdir -p "$out"
 
+rm -rf .output
 npm ci
 npm run zip
 cp .output/*-chrome.zip "$out/hitoiki-chrome.zip"
