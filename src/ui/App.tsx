@@ -54,8 +54,10 @@ export function App({ runner }: { runner: Runner }) {
       {toast && <div className="hi-toast" role="status">{toast}</div>}
       {!onBreak && !panelOpen && (
         <div className="hi-dock">
-          {snap.state.prompt.waitingForUser && <button className="hi-ready" onClick={() => runner.startDeferredBreak()}>
-            <Icon name="leaf" /><span>区切りがついた！</span><span className="hi-ready-minutes">{breakMinutes(snap.load, snap.settings.breakScale)}分休む</span>
+          {snap.state.prompt.waitingForUser && <button className="hi-ready" onClick={() => runner.startDeferredBreak()}
+            title={`${breakMinutes(snap.load, snap.settings.breakScale)}分の休憩を始める`}
+            aria-label={`区切りがついた。${breakMinutes(snap.load, snap.settings.breakScale)}分の休憩を始める`}>
+            <Icon name="leaf" /><span>区切りがついた</span>
           </button>}
           <button ref={pill} className="hi-pill" onClick={() => setOpen(true)} aria-label="作業モニターを開く" aria-expanded={false}>
             <LoadRing value={snap.load} /><span>計測中</span><strong className="hi-pill-percent">{loadPercent(snap.load)}%</strong><Icon name="chevron" />
@@ -101,25 +103,8 @@ function LoadRing({ value }: { value: number }) {
 
 function PromptCard({ snap, onAction }: { snap: UiSnapshot; onAction: (action: 'now' | 'next_breakpoint') => void }) {
   const copy = promptCopy(snap.prompt!.top, snap.state.uf >= HIGH_UF);
-  const [bottom, setBottom] = useState(150);
-  const composerSelector = snap.diagnostics.matched.composer;
-  useEffect(() => {
-    // 観測側が見つけた入力欄を使い、入力欄が伸びても通知をその上に置く。
-    const composer = composerSelector ? document.querySelector(composerSelector) : null;
-    const anchor = composer?.closest('form') ?? composer;
-    if (!anchor) return;
-    const place = () => {
-      const bounds = anchor.getBoundingClientRect();
-      if (bounds.height > 0) setBottom(Math.max(150, window.innerHeight - bounds.top + 16));
-    };
-    const observer = new ResizeObserver(place);
-    observer.observe(anchor);
-    window.addEventListener('resize', place);
-    place();
-    return () => { observer.disconnect(); window.removeEventListener('resize', place); };
-  }, [composerSelector]);
   return (
-    <section className="hi-card hi-prompt" style={{ bottom }} role="status" aria-label="休憩の提案">
+    <section className="hi-card hi-prompt" role="status" aria-label="休憩の提案">
       <div className="hi-head">
         <div className="hi-heading"><Icon name="clock" /><h2>{copy.title}</h2></div>
         <button className="hi-icon-btn" onClick={() => onAction('next_breakpoint')} aria-label="休憩の提案を閉じて開始ボタンを残す"><Icon name="close" /></button>

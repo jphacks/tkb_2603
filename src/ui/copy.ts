@@ -26,6 +26,6 @@ export function endCopy(opts: { top: ElementKey | null; plannedMin: number; high
   return 'ひと休み、おつかれさまでした。自分のペースで続きをどうぞ。';
 }
 export const SNOOZE_COPY = {
-  next_breakpoint: '作業が終わったら「区切りがついた！」を押してください。',
+  next_breakpoint: '作業が終わったら「区切りがついた」を押してください。',
   decline: 'あとで、またお知らせします。',
 };

@@ -86,7 +86,8 @@ describe('画像に合わせたUIの操作', () => {
     snap = { ...snap, load: 100 };
     await publish();
     expect(container.firstElementChild?.getAttribute('data-load-level')).toBe('critical');
-    expect(container.querySelector('.hi-ready')?.textContent).toContain('15分休む');
+    expect(container.querySelector('.hi-ready')?.textContent).toBe('区切りがついた');
+    expect(container.querySelector('.hi-ready')?.getAttribute('title')).toBe('15分の休憩を始める');
   });
 
   it('秒表示は操作による再描画で戻らず、倍速と新しい時計に追従する', async () => {
