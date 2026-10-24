@@ -23,7 +23,7 @@ AI でコードを書くのは速くなりました。でも人の仕事は消�
 
 - 判断と確認の一部は、Anthropic の API キーを使って会話を分類して取ります。キーが無くても、エラーの貼り付けや会話の切替などの手がかりで動きます(判断は「未計測」になります)
 - **対応しているサイト**: ChatGPT(chatgpt.com)・Claude(claude.ai)・Gemini(gemini.google.com)。サイトごとの違いは画面の読み取り方だけで、[`src/content/sites.ts`](src/content/sites.ts) の定義を足せば広げられます。計算・画面・分類はどのサイトでも同じです
-- **次はエディタとターミナルへ**: 計算の部分は画面と切り離してあり、VS Code の拡張や、Claude Code の hooks(承認待ちやテストの失敗まで取れる)にもつなげられます(今後の展望)
+- **VS Code でも動きます**([`vscode/`](vscode/)): 同じ計算([`src/core/`](src/core/))を、エディタの出来事で動かします。読む量(まとまった挿入)・確認(ターミナルやタスクで動かしたテスト・ビルドの失敗)・ファイルの切替・作業時間でたまり、ステータスバーに「ひといき ○%」を出します。提案・休憩・おかえりは Chrome 版と同じ文と流れです。判断は VS Code では未計測で、器は Chrome 版と別々です(1 人に 1 つの器にまとめるのが次)
 
 ### 特長
 #### 1. 特長1
@@ -48,7 +48,8 @@ AI でコードを書くのは速くなりました。でも人の仕事は消�
 - 「この休憩どうだった?」の答え: (記入予定)
 
 ### 今後の展望
-- **開発の現場に広げる**: Claude Code・Codex の hooks からは、承認待ちやテストの失敗まで取れます。計算の部分は画面と切り離してあるので、出来事の形を合わせれば同じ計算につなげられます。VS Code の拡張も同じです
+- **開発の現場に広げる**: VS Code では同じ計算が動きました。次は Claude Code・Codex の hooks です。承認待ちやテストの失敗まで取れるので、出来事の形を合わせれば同じ計算につなげられます
+- **1 人に 1 つの器にする**: 今は Chrome と VS Code で器が別々です。頭は 1 つなので、まとめてためるのが次です
 - **本人に合わせる**: 「役立った?」の答えや「あとで」を押した回数から、たまる速さを本人に合わせます
 - **配れる形にする**: 今は自分たちで使う試作で、API キーはブラウザの中にあります。配るときは、サーバーを通す形に変えます
 
@@ -68,9 +69,10 @@ AI でコードを書くのは速くなりました。でも人の仕事は消�
 * WXT(Chrome 拡張のフレームワーク)、React、TypeScript
 * @anthropic-ai/sdk
 * Vitest、happy-dom(計算と画面の読み取りのテスト)
+* VS Code Extension API、esbuild、@vscode/test-electron(VS Code 版と、実際の VS Code で動かす確認)
 
 #### デバイス
-* PC(Google Chrome)
+* PC(Google Chrome、VS Code)
 
 ### 独自技術
 #### ハッカソンで開発した独自機能・技術
@@ -79,6 +81,7 @@ AI でコードを書くのは速くなりました。でも人の仕事は消�
 - **Claude・Gemini に対応**(PR #2): 画面の読み取りをサイト別の定義([`src/content/sites.ts`](src/content/sites.ts))と共通の観測係([`src/content/observer.ts`](src/content/observer.ts))に分けた。新しい会話の 1 通目を取り逃さない
 - **記録を足した**(PR #2): どのサイトか、入力の始まりと終わり、生成の始まり、分類のトークン数
 - **記録の集計と、30 分タイマーとの比べ**(PR #3): [`scripts/analyze-log.ts`](scripts/analyze-log.ts)
+- **VS Code 拡張**(PR #5): 同じ計算をエディタの出来事で動かし、提案・休憩・おかえりまで Chrome と同じ流れにした。[`vscode/src/tracker.ts`](vscode/src/tracker.ts)、[`vscode/src/extension.ts`](vscode/src/extension.ts)。動かし方は [`vscode/README.md`](vscode/README.md)
 
 **開会前に作った土台**(事前の開発。評価の対象は上の Hack Day 中の差分です)
 - コミット fac9ea6・b7d760a・1f5a4ff(10/24 未明)
