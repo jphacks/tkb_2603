@@ -1,0 +1,229 @@
+[
+  {
+    "type": "observation",
+    "kind": "typing_start",
+    "at": 1792803600000,
+    "minute": 0
+  },
+  {
+    "type": "observation",
+    "kind": "typing_end",
+    "at": 1792803660000,
+    "minute": 1
+  },
+  {
+    "type": "observation",
+    "kind": "prompt_sent",
+    "detail": {
+      "chars": 120
+    },
+    "at": 1792803660000,
+    "minute": 1
+  },
+  {
+    "type": "observation",
+    "kind": "generation_start",
+    "at": 1792803666000,
+    "minute": 1.1
+  },
+  {
+    "type": "observation",
+    "kind": "response_done",
+    "detail": {
+      "jaChars": 800,
+      "enWords": 20,
+      "continuation": false
+    },
+    "at": 1792803720000,
+    "minute": 2
+  },
+  {
+    "type": "classify",
+    "ok": true,
+    "model": "claude-opus-5-5",
+    "ms": 1800,
+    "at": 1792803750000,
+    "minute": 2.5
+  },
+  {
+    "type": "observation",
+    "kind": "classified",
+    "detail": {
+      "decisions": 1,
+      "verifications": 0,
+      "shift": false
+    },
+    "at": 1792803750000,
+    "minute": 2.5
+  },
+  {
+    "type": "observation",
+    "kind": "prompt_sent",
+    "detail": {
+      "chars": 40
+    },
+    "at": 1792805280000,
+    "minute": 28
+  },
+  {
+    "type": "observation",
+    "kind": "generation_start",
+    "at": 1792805340000,
+    "minute": 29
+  },
+  {
+    "type": "observation",
+    "kind": "response_done",
+    "detail": {
+      "jaChars": 300,
+      "enWords": 0,
+      "continuation": false
+    },
+    "at": 1792805460000,
+    "minute": 31
+  },
+  {
+    "type": "classify",
+    "ok": false,
+    "model": "claude-opus-5-5",
+    "ms": 30000,
+    "error": "timeout",
+    "at": 1792805490000,
+    "minute": 31.5
+  },
+  {
+    "type": "prompt_shown",
+    "load": 82,
+    "mode": "notify",
+    "waitedSec": 45,
+    "top": "decision",
+    "at": 1792806000000,
+    "minute": 40
+  },
+  {
+    "type": "prompt_action",
+    "action": "next_breakpoint",
+    "at": 1792806012000,
+    "minute": 40.2
+  },
+  {
+    "type": "prompt_shown",
+    "load": 85,
+    "mode": "notify",
+    "waitedSec": 15,
+    "top": "reading",
+    "at": 1792806240000,
+    "minute": 44
+  },
+  {
+    "type": "prompt_action",
+    "action": "now",
+    "at": 1792806246000,
+    "minute": 44.1
+  },
+  {
+    "type": "break_start",
+    "plannedMin": 5,
+    "hasMemo": true,
+    "load": 85,
+    "at": 1792806246000,
+    "minute": 44.1
+  },
+  {
+    "type": "break_end",
+    "plannedMin": 5,
+    "actualMin": 5,
+    "completed": true,
+    "at": 1792806546000,
+    "minute": 49.1
+  },
+  {
+    "type": "feedback",
+    "value": "good",
+    "at": 1792806552000,
+    "minute": 49.2
+  },
+  {
+    "type": "observation",
+    "kind": "prompt_sent",
+    "detail": {
+      "chars": 200
+    },
+    "at": 1792806900000,
+    "minute": 55
+  },
+  {
+    "type": "observation",
+    "kind": "generation_start",
+    "at": 1792806912000,
+    "minute": 55.2
+  },
+  {
+    "type": "observation",
+    "kind": "response_done",
+    "detail": {
+      "jaChars": 1959,
+      "enWords": 0,
+      "continuation": false
+    },
+    "at": 1792807080000,
+    "minute": 58
+  },
+  {
+    "type": "classify",
+    "ok": true,
+    "model": "claude-opus-5-5",
+    "ms": 2200,
+    "at": 1792807110000,
+    "minute": 58.5
+  },
+  {
+    "type": "observation",
+    "kind": "typing_start",
+    "at": 1792807140000,
+    "minute": 59
+  },
+  {
+    "type": "observation",
+    "kind": "typing_end",
+    "at": 1792807260000,
+    "minute": 61
+  },
+  {
+    "type": "prompt_shown",
+    "load": 81,
+    "mode": "notify",
+    "waitedSec": null,
+    "top": null,
+    "at": 1792807380000,
+    "minute": 63
+  },
+  {
+    "type": "prompt_action",
+    "action": "decline",
+    "at": 1792807386000,
+    "minute": 63.1
+  },
+  {
+    "type": "break_start",
+    "plannedMin": 5,
+    "hasMemo": false,
+    "load": 81,
+    "at": 1792807500000,
+    "minute": 65
+  },
+  {
+    "type": "break_end",
+    "plannedMin": 5,
+    "actualMin": 2,
+    "completed": false,
+    "at": 1792807620000,
+    "minute": 67
+  },
+  {
+    "type": "feedback",
+    "value": "unneeded",
+    "at": 1792807626000,
+    "minute": 67.1
+  }
+]
