@@ -6,11 +6,13 @@ Issue #4。Cloudflare WorkersとSQLite Durable Objectで分類を中継する。
 
 2026-10-24に `https://hitoiki-proxy.gaku-fujio.workers.dev/health` が200で `{"ok":true,"enabled":false}` を返すことを確認した。Workerの公開・共有キーの登録は公開担当者が実施済み。拡張の接続先は `.env.example` に記載し、ローカルの `.env` に設定してビルドする。
 
-2026-10-25に使用モデルを `claude-haiku-5-5` と確定した。ユーザーの指示により、金額の予算上限は当面設けず、乱用防止の回数制限は維持する。`proxy/wrangler.jsonc` はモデル指定と `CLASSIFICATION_ENABLED: "true"` に更新済みで、次のdeployから有効になる。共有キーでの分類・実サイトの動作確認を終えてからZIPを配布する。
+2026-10-25に使用モデルを `claude-haiku-5-5` と確定し、公開Workerへ反映した。ユーザーの指示により、金額の予算上限は当面設けず、乱用防止の回数制限は維持する。公開APIに合成会話を送信し、HTTP 200・指定モデル・応答形式の検証に成功した。実際のAIチャットに読み込んだ拡張の動作確認を終えてからZIPを配布する。
 
 有効化後の初回分類テストは503で失敗した。公開版のモデル・有効化フラグ・回数制限・Secret名は確認済み。工程別エラーで上流fetchの呼び出し前後に切り分け、Workersがサポートしない `redirect: "error"` を指定していた実装を修正した。`redirect: "manual"` で3xxをエラーとして扱い、APIキーや本文を別のURLへ転送しない。ローカルHTTP検証でも実際のWorkersのRequestコンストラクターを通す。
 
 Haiku 5.5の既定の思考が出力枠を消費することにも対応し、短い抽出用に `thinking: { type: "disabled" }` と `output_config.effort: "low"` を指定した。
+
+修正版の公開バージョンは `86328dd0-a48e-4def-985f-9b3165218cf6`。2026-10-25の合成会話による公開確認で、モデル `claude-haiku-5-5`、処理時間2425ms、入力1077・出力103トークン、判断1件・確認1件・話題切替なしを取得した。実際の利用者の会話や秘密キーの値は、この検証に使っていない。
 
 失敗時は固定のエラーコードで工程を判別する。`quota_unavailable`は回数制限基盤、`upstream_unavailable`は上流への通信やHTTPエラー、`classification_truncated`は出力枠の不足、`invalid_classification`は応答形式の不一致。上流HTTPエラーでは数値の`upstreamStatus`だけ追加する。会話・キー・上流エラー本文は公開応答やログに含めない。
 
@@ -110,10 +112,10 @@ npm run zip
 ## この段階の確認結果
 
 - 拡張: 10ファイル・75件のテストと型チェック、Chrome用ビルド成功。
-- 中継: 12件のテスト、型チェック、Wranglerのドライラン成功。
+- 中継: 15件のテスト、型チェック、Wranglerのドライランと公開更新成功。
 - ローカルのWorkerとSQLite Durable ObjectをHTTP経由で呼び、端末ごと・全体の枠と同時予約を確認。
 - Chromeの確認用画面（1440pxライト／390pxダーク）で、初回説明・ローカルのみ・同意・取消・接続方式の切替を確認。
-- 本番の共有キーと公開URLを使った実サイト確認・最終配布ZIPの作成は、公開担当者の設定後に行う。
+- 公開Workerと登録済み共有キーによる合成会話の分類成功を確認。実際のAIチャット上で拡張から行う確認は残っている。
 
 ## 開発・検証
 
