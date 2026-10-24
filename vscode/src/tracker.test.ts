@@ -1,7 +1,16 @@
 import { expect, it } from 'vitest';
 import { load } from '../../src/core/model';
 import { DEFAULT_PARAMS } from '../../src/core/types';
-import { BULK_CAP_CHARS, SWITCH_MIN_INTERVAL_MS, TYPING_QUIET_MS, Tracker, VSCODE_PARAMS, type TextChangeLike } from './tracker';
+import {
+  BULK_CAP_CHARS,
+  SWITCH_MIN_INTERVAL_MS,
+  TYPING_QUIET_MS,
+  Tracker,
+  VSCODE_PARAMS,
+  type TextChangeLike,
+  stretchMessage,
+  welcomeMessage,
+} from './tracker';
 
 const idle = { taskRunning: false, debugging: false, focused: true };
 
@@ -118,4 +127,94 @@ it('判断は取れないので、器は 5 要素の平均で遅めにたまる(
   t.tick();
   expect(t.state.contribSinceBreak.decision).toBe(0);
   expect(t.state.llmAvailable).toBe(false);
+});
+
+/** 失敗を続けて、提案が出るところまで進めた Tracker */
+function prompted(threshold = 20): Tracker {
+  const t = new Tracker(undefined, { ...VSCODE_PARAMS, threshold });
+  for (let min = 0; min < 60 && !t.state.prompt.declineStreak; min++) {
+    t.onCommandEnd(1, 0);
+    t.tick();
+    t.checkPrompt(min * 60_000 + 10_000, idle);
+  }
+  expect(t.state.prompt.declineStreak).toBe(1);
+  return t;
+}
+
+it('「今休む」で休憩を始め、休憩中だけ器が下がり、予定の時間でおかえりになる', () => {
+  const t = prompted();
+  t.random = () => 0.5; // 肩回し
+  const before = load(t.state);
+  expect(t.respondToPrompt('now', 'テストを確認')).toBe(true);
+  const b = t.state.breakState!;
+  expect(b.memo).toBe('テストを確認');
+  expect(b.stretch).toBe('shoulder');
+  expect(b.plannedMin).toBe(10); // 器 80 前後は 10 分(breakMinutes)
+  // 答えた時は「出した時の今回は不要」を取り消す
+  expect(t.state.prompt.declineStreak).toBe(0);
+  expect(t.checkPrompt(1e9, idle)).toBeNull(); // 休憩中は提案しない
+
+  let finished = null;
+  for (let i = 0; i < b.plannedMin && !finished; i++) finished = t.tick().finished;
+  expect(finished).toMatchObject({ memo: 'テストを確認', plannedMin: 10, completed: true, top: 'verification' });
+  expect(t.state.breakState).toBeNull();
+  expect(load(t.state)).toBeLessThan(before / 2); // RF が 1 分 8 ずつ下がる(UF は残る)
+  const msg = welcomeMessage(finished!, t.state.uf);
+  expect(msg).toContain('おかえりなさい。確認の続きは、ひとつずつ進めましょう。');
+  expect(msg).toContain('戻ったらやること: テストを確認');
+});
+
+it('「次の区切りで」は自分で始めるまで待ち、「今回は不要」と押さずに消えたのは出した時の扱いのまま', () => {
+  const later = prompted();
+  later.respondToPrompt('next_breakpoint');
+  expect(later.state.prompt.waitingForUser).toBe(true);
+  expect(later.state.breakState).toBeNull();
+  expect(later.startDeferredBreak('')).toBe(true);
+  expect(later.state.breakState).not.toBeNull();
+
+  for (const action of ['decline', undefined] as const) {
+    const t = prompted();
+    const prompt = structuredClone(t.state.prompt);
+    expect(t.respondToPrompt(action)).toBe(true);
+    expect(t.state.prompt).toEqual(prompt);
+    expect(t.state.breakState).toBeNull();
+    // 2 回目の答えは無視する
+    expect(t.respondToPrompt('now')).toBe(false);
+  }
+});
+
+it('提案を待たずに休める(器が低くても 80 の時の長さ)・途中で終えると completed が false', () => {
+  const t = new Tracker();
+  expect(t.startManualBreak('')).toBe(true);
+  expect(t.state.breakState?.plannedMin).toBe(10);
+  expect(t.startManualBreak('')).toBe(false);
+  t.tick();
+  expect(t.finishBreak(false)).toMatchObject({ completed: false, plannedMin: 10 });
+  expect(t.state.breakState).toBeNull();
+});
+
+it('休憩の長さの調整(breakScale)を使う', () => {
+  const t = new Tracker();
+  t.breakScale = 0.5;
+  t.startManualBreak('');
+  expect(t.state.breakState?.plannedMin).toBe(5);
+});
+
+it('ストレッチの文は Chrome 版と同じ', () => {
+  expect(stretchMessage('reach')).toContain('背伸び: 両腕を上げて、ゆっくり背伸びしましょう');
+  expect(stretchMessage(undefined)).toContain('背伸び');
+});
+
+it('休憩中に閉じて開き直すと、閉じていた間も休憩のタイマーが進む', () => {
+  const t = new Tracker();
+  t.startManualBreak('続き');
+  t.tick();
+  t.tick();
+  // 保存した状態から作り直す(globalState に入れて出したのと同じ)
+  const reopened = new Tracker(structuredClone(t.state));
+  reopened.breakTopAtStart = t.breakTopAtStart;
+  expect(reopened.catchUp(3)).toBeNull();
+  expect(reopened.breakRemainingMin()).toBe(5);
+  expect(reopened.catchUp(30)).toMatchObject({ memo: '続き', completed: true });
+  expect(reopened.state.breakState).toBeNull();
 });

@@ -80,6 +80,23 @@ async function main() {
   log('提案の数', api.promptsShown(), `待った秒数=${((Date.now() - t1) / 1000).toFixed(1)}`, status());
   if (api.promptsShown() === 0) throw new Error('提案が出なかった');
 
+  // 提案 → 今休む → 倍速で休憩が終わる → 器が下がっている → おかえりが出る
+  const loadBefore = api.tracker.load();
+  await api.choosePrompt('今休む', 'テストを確認');
+  const brk = api.tracker.state.breakState;
+  if (!brk) throw new Error('「今休む」で休憩が始まらなかった');
+  log('休憩を始めた', `予定=${brk.plannedMin} 分`, `ストレッチ=${brk.stretch}`, `メモ=${brk.memo}`, status());
+  const t3 = Date.now();
+  while (api.tracker.state.breakState && Date.now() - t3 < 30_000) await sleep(200);
+  if (api.tracker.state.breakState) throw new Error('休憩が終わらなかった');
+  const welcomes = api.welcomes();
+  log('休憩が終わった', `実時間=${((Date.now() - t3) / 1000).toFixed(1)} 秒`, `器 ${loadBefore.toFixed(1)} → ${api.tracker.load().toFixed(1)}`);
+  log('おかえり', JSON.stringify(welcomes.at(-1)));
+  if (!(api.tracker.load() < loadBefore - 40)) throw new Error('休憩の後に器が下がっていない');
+  if (welcomes.length !== 1 || !welcomes[0].includes('おかえりなさい') || !welcomes[0].includes('テストを確認')) {
+    throw new Error('おかえりの通知が出なかった');
+  }
+
   // 補完を何回も受け入れた後(まとまった挿入が続いた後)でも、止まれば提案が出るか
   await vscode.commands.executeCommand('hitoiki.reset');
   const doc = await vscode.workspace.openTextDocument({ language: 'typescript', content: '' });

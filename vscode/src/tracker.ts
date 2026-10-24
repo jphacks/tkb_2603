@@ -1,8 +1,19 @@
 // VS Code の出来事を core の Observation に変えて、器を動かす。
 // vscode モジュールには依存しない(テストで VS Code の API をまねた形を渡せるように)。
-import { type GateContext, applyPromptAction, shouldPrompt } from '../../src/core/gate';
-import { load, observe, splitText, tick, topContributor, type TickResult } from '../../src/core/model';
-import { DEFAULT_PARAMS, type ElementKey, type EngineState, type ModelParams, type Observation, initialState } from '../../src/core/types';
+import { type GateContext, type PromptAction, applyPromptAction, shouldPrompt } from '../../src/core/gate';
+import { breakMinutes, endBreak, load, observe, splitText, startBreak, tick, topContributor, type TickResult } from '../../src/core/model';
+import {
+  DEFAULT_PARAMS,
+  type ElementKey,
+  type EngineState,
+  type ModelParams,
+  type Observation,
+  type PromptState,
+  type StretchId,
+  initialState,
+} from '../../src/core/types';
+// 休憩の文は Chrome 版と同じものを使う(どちらも純粋な定数・関数)
+import { endCopy, STRETCHES } from '../../src/ui/copy';
 
 /** これ以上の文字数が 1 回の変更で入ったら「まとまった挿入」(読む量)とみなす。それ未満は入力 */
 export const BULK_MIN_CHARS = 100;
@@ -44,6 +55,18 @@ export interface GateInfo {
   debugging: boolean;
 }
 
+/** 今日の積み重ね(UF)がこれ以上なら、おかえりの文を変える(Chrome 版の App.tsx の HIGH_UF と同じ値) */
+export const HIGH_UF = 30;
+
+export interface FinishedBreak {
+  memo: string;
+  plannedMin: number;
+  /** 休憩を始めた時に一番効いていた要素 */
+  top: ElementKey | null;
+  /** 予定の時間まで休んだか(途中で終えたら false) */
+  completed: boolean;
+}
+
 const REASONS: Record<ElementKey | 'default', string> = {
   default: '作業が続いています。',
   reading: 'まとまった量のコードや文章が入る作業が続いています。',
@@ -57,9 +80,29 @@ export function promptMessage(top: ElementKey | null): string {
   return `ひと休みしませんか。${REASONS[top ?? 'default']}`;
 }
 
+/** 休憩中に出す、ストレッチの文 */
+export function stretchMessage(id: StretchId | undefined): string {
+  const s = STRETCHES.find((item) => item.id === (id ?? 'reach')) ?? STRETCHES[0];
+  return `${s.name}: ${s.line}。そのまま休んでもOK。無理のない範囲で。`;
+}
+
+/** おかえりの通知の文(Chrome 版のおかえりの画面と同じ文) */
+export function welcomeMessage(f: FinishedBreak, uf: number): string {
+  const line = endCopy({ top: f.top, plannedMin: f.plannedMin, highUf: uf >= HIGH_UF });
+  return `おかえりなさい。${line}${f.memo ? `\n戻ったらやること: ${f.memo}` : ''}`;
+}
+
 export class Tracker {
   state: EngineState;
   params: ModelParams;
+  /** 休憩の長さの調整(0.5 短め / 1 標準 / 1.5 長め。Chrome 版の breakScale と同じ) */
+  breakScale = 1;
+  /** 休憩を始めた時に一番効いていた要素(おかえりの文に使う。保存する) */
+  breakTopAtStart: ElementKey | null = null;
+  /** ストレッチを選ぶ乱数(テストで差し替える) */
+  random: () => number = Math.random;
+  /** 出した提案に、まだ答えていない間の「出す前の提案の状態」。答えが来たらこれに戻してから操作を当てる */
+  private pendingPrompt: PromptState | null = null;
   private lastTypingAt = -Infinity;
   private lastActivityPushAt = -Infinity;
   private lastSwitchAt = -Infinity;
@@ -131,10 +174,77 @@ export class Tracker {
     this.push({ kind: 'activity', t: this.state.minute });
   }
 
-  tick(): TickResult {
+  /**
+   * 計算上の 1 分を進める。休憩の予定時間が過ぎたら休憩を終える。
+   * present: 目の前に人がいる 1 分か(開き直した時の取り戻しでは false)
+   */
+  tick(present = true): TickResult & { finished: FinishedBreak | null } {
     const res = tick(this.state, this.params);
     this.state = res.state;
-    return res;
+    const b = this.state.breakState;
+    const finished = b && this.state.minute - b.startedAt >= b.plannedMin ? this.finishBreak(true, present) : null;
+    return { ...res, finished };
+  }
+
+  /**
+   * 開き直した時に、閉じていた間の分(計算上の分)を進める。休憩中なら休憩のタイマーが続き、
+   * 予定の時間を過ぎていれば終える(作業していないので器は増えない)。上限は 1 日
+   */
+  catchUp(minutes: number): FinishedBreak | null {
+    let finished: FinishedBreak | null = null;
+    const n = Math.min(Math.max(0, Math.floor(minutes)), 24 * 60);
+    for (let i = 0; i < n; i++) finished = this.tick(false).finished ?? finished;
+    return finished;
+  }
+
+  /** 休憩の残り(計算上の分)。休憩中でなければ null */
+  breakRemainingMin(): number | null {
+    const b = this.state.breakState;
+    return b ? Math.max(0, b.plannedMin - (this.state.minute - b.startedAt)) : null;
+  }
+
+  /** 提案への答え。undefined(押さずに消えた)と「今回は不要」は、出した時の扱いのまま */
+  respondToPrompt(action: PromptAction | undefined, memo = ''): boolean {
+    const previous = this.pendingPrompt;
+    if (!previous) return false;
+    this.pendingPrompt = null;
+    if (!action || action === 'decline' || this.state.breakState) return true;
+    this.state = { ...this.state, prompt: previous };
+    if (action === 'now') this.beginBreak(breakMinutes(load(this.state), this.breakScale), memo);
+    else this.state = applyPromptAction(this.state, 'next_breakpoint');
+    return true;
+  }
+
+  /** 提案を待たずに休む(Chrome 版の startManualBreak と同じく、器が低くても 80 の時の長さ) */
+  startManualBreak(memo: string): boolean {
+    if (this.state.breakState) return false;
+    this.pendingPrompt = null;
+    this.beginBreak(breakMinutes(Math.max(80, load(this.state)), this.breakScale), memo);
+    return true;
+  }
+
+  /** 「次の区切りで」を選んだ後に、自分で休憩を始める */
+  startDeferredBreak(memo = ''): boolean {
+    if (!this.state.prompt.waitingForUser || this.state.breakState) return false;
+    this.beginBreak(breakMinutes(load(this.state), this.breakScale), memo);
+    return true;
+  }
+
+  private beginBreak(minutes: number, memo: string): void {
+    this.breakTopAtStart = topContributor(this.state);
+    const stretches: StretchId[] = ['reach', 'shoulder', 'sway'];
+    const stretch = stretches[Math.min(stretches.length - 1, Math.floor(this.random() * stretches.length))]!;
+    this.state = startBreak(this.state, minutes, memo, stretch);
+  }
+
+  /** 休憩を終える(予定の時間が来た時と、途中で終える時) */
+  finishBreak(completed: boolean, present = true): FinishedBreak | null {
+    const b = this.state.breakState;
+    if (!b) return null;
+    const finished: FinishedBreak = { memo: b.memo, plannedMin: b.plannedMin, top: this.breakTopAtStart, completed };
+    this.state = endBreak(this.state, present);
+    this.pendingPrompt = null;
+    return finished;
   }
 
   load(): number {
@@ -154,13 +264,14 @@ export class Tracker {
   }
 
   /**
-   * 今、提案を出すか。出すときは文を返し、次の提案までの間を空ける(休憩のタイマーは作らないので、
-   * 出した時点で core の「今回は不要」と同じ扱いにする)
+   * 今、提案を出すか。出すときは文を返す。VS Code の通知は押さずに消えても答えが返らないことがあるので、
+   * 出した時点で「今回は不要」と同じく次の提案まで間を空けておき、ボタンの答えが来たら respondToPrompt で上書きする
    */
   checkPrompt(nowMs: number, info: GateInfo): string | null {
     if (info.taskRunning || info.debugging) return null;
     if (!shouldPrompt(this.state, this.params, this.gateContext(nowMs, info.focused))) return null;
     const message = promptMessage(topContributor(this.state));
+    this.pendingPrompt = structuredClone(this.state.prompt);
     this.state = applyPromptAction(this.state, 'decline');
     return message;
   }

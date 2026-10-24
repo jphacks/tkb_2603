@@ -19,6 +19,18 @@
   "contributes": {
     "commands": [
       {
+        "command": "hitoiki.breakNow",
+        "title": "ひといき: 今休む"
+      },
+      {
+        "command": "hitoiki.startDeferredBreak",
+        "title": "ひといき: 休憩を始める(次の区切りで、を選んだ後)"
+      },
+      {
+        "command": "hitoiki.endBreak",
+        "title": "ひといき: 休憩を終える"
+      },
+      {
         "command": "hitoiki.reset",
         "title": "ひといき: 器を 0 に戻す"
       }
@@ -39,6 +51,21 @@
           "minimum": 10,
           "maximum": 200,
           "description": "休憩を提案する器のしきい値"
+        },
+        "hitoiki.breakScale": {
+          "type": "number",
+          "default": 1,
+          "enum": [
+            0.5,
+            1,
+            1.5
+          ],
+          "enumDescriptions": [
+            "短め",
+            "標準",
+            "長め"
+          ],
+          "description": "休憩の長さの調整(Chrome 版と同じ。器 80 で標準 10 分)"
         }
       }
     }
