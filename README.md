@@ -83,7 +83,7 @@ AI でコードを書くのは速くなりました。でも人の仕事は消�
 - **Claude・Gemini に対応**(PR #2): 画面の読み取りをサイト別の定義([`src/content/sites.ts`](src/content/sites.ts))と共通の観測係([`src/content/observer.ts`](src/content/observer.ts))に分けた。新しい会話の 1 通目を取り逃さない
 - **記録を足した**(PR #2): どのサイトか、入力の始まりと終わり、生成の始まり、分類のトークン数
 - **記録の集計と、30 分タイマーとの比べ**(PR #3): [`scripts/analyze-log.ts`](scripts/analyze-log.ts)
-- **VS Code 拡張**(PR #5): 同じ計算をエディタの出来事で動かし、提案・休憩・おかえりまで Chrome と同じ流れにした。[`vscode/src/tracker.ts`](vscode/src/tracker.ts)、[`vscode/src/extension.ts`](vscode/src/extension.ts)。動かし方は [`vscode/README.md`](vscode/README.md)
+- **VS Code 拡張**(PR #5): 同じ計算をエディタの出来事で動かし、提案・休憩・おかえりまで Chrome と同じ流れにした。[`vscode/src/tracker.ts`](vscode/src/tracker.ts)、[`vscode/src/extension.ts`](vscode/src/extension.ts)。動かし方は [`vscode/DEVELOPMENT.md`](vscode/DEVELOPMENT.md)
 - **本番とデモを分けた**(PR #8): 倍速・たまる速さ・診断は本番では隠し([`src/shared/flags.ts`](src/shared/flags.ts))、パネルの詳細に「30 分ごとのタイマーだったら」の今日の比べを 1 行出す([`src/shared/timerCompare.ts`](src/shared/timerCompare.ts))。デモ用は [jphacks/tkb_2603-demo](https://github.com/jphacks/tkb_2603-demo)
 - **配布**(PR #6・#7): CI でテストとビルドを回し、Chrome の zip と VS Code の .vsix を [Releases](https://github.com/jphacks/tkb_2603/releases/latest) に置いた。入れ方は [配布ページ](https://jphacks.github.io/tkb_2603-demo/)
 
