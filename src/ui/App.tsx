@@ -14,6 +14,7 @@ const HIGH_UF = 30;
 export function App({ runner }: { runner: Runner }) {
   const [snap, setSnap] = useState<UiSnapshot | null>(null);
   const [open, setOpen] = useState(false);
+  const [monitorCollapsed, setMonitorCollapsed] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const theme = usePageTheme();
   const pill = useRef<HTMLButtonElement>(null);
@@ -54,24 +55,39 @@ export function App({ runner }: { runner: Runner }) {
       {panelOpen && <Detail snap={snap} runner={runner} onClose={closePanel} />}
       {toast && <div className="hi-toast" role="status">{toast}</div>}
       {!onBreak && !panelOpen && (
-        <Dock snap={snap} runner={runner} pill={pill} onOpen={() => setOpen(true)} />
+        <Dock snap={snap} runner={runner} pill={pill} onOpen={() => setOpen(true)} collapsed={monitorCollapsed}
+          onToggleCollapse={() => {
+            setMonitorCollapsed((value) => !value);
+            window.requestAnimationFrame(() => pill.current?.focus());
+          }} />
       )}
     </div>
   );
 }
 
-function Dock({ snap, runner, pill, onOpen }: { snap: UiSnapshot; runner: Runner; pill: RefObject<HTMLButtonElement | null>; onOpen: () => void }) {
+function Dock({ snap, runner, pill, onOpen, collapsed, onToggleCollapse }: {
+  snap: UiSnapshot; runner: Runner; pill: RefObject<HTMLButtonElement | null>; onOpen: () => void;
+  collapsed: boolean; onToggleCollapse: () => void;
+}) {
   const { ref, bottom } = useDockPosition();
   const minutes = breakMinutes(snap.load, snap.settings.breakScale);
+  const canCollapse = loadPercent(snap.load) < 80;
+  const compact = canCollapse && collapsed;
   return <div ref={ref} className="hi-dock" style={{ bottom }}>
     {snap.state.prompt.waitingForUser && <button className="hi-ready" onClick={() => runner.startDeferredBreak()}
       title={`${minutes}分の休憩を始める`}
       aria-label={`区切りがついたら、${minutes}分休む`}>
       <Icon name="leaf" /><span className="hi-ready-copy"><small>区切りがついたら</small><strong>{minutes}分休む</strong></span>
     </button>}
-    <button ref={pill} className="hi-pill" onClick={onOpen} aria-label="作業モニターを開く" aria-expanded={false}>
-      <LoadRing value={snap.load} /><span>計測中</span><strong className="hi-pill-percent">{loadPercent(snap.load)}%</strong><Icon name="chevron" />
-    </button>
+    <div className={`hi-measure${compact ? ' hi-measure-collapsed' : ''}`}>
+      <button ref={pill} className="hi-pill" onClick={compact ? onToggleCollapse : onOpen}
+        title={compact ? `計測中 ${loadPercent(snap.load)}% · クリックで広げる` : '作業モニターを開く'}
+        aria-label={compact ? '計測表示を広げる' : '作業モニターを開く'} aria-expanded={false}>
+        {compact ? <Icon name="leaf" /> : <><LoadRing value={snap.load} /><span>計測中</span><strong className="hi-pill-percent">{loadPercent(snap.load)}%</strong><Icon name="chevron" /></>}
+      </button>
+      {canCollapse && !compact && <button className="hi-collapse-btn" onClick={onToggleCollapse}
+        title="計測表示を折りたたむ" aria-label="計測表示を折りたたむ"><Icon name="minimize" /></button>}
+    </div>
   </div>;
 }
 

@@ -117,6 +117,35 @@ describe('画像に合わせたUIの操作', () => {
     vi.restoreAllMocks();
   });
 
+  it('80%未満ではアイコンに折りたため、80%以上では自動で数値に戻して詳細を開ける', async () => {
+    snap = { ...snap, load: 79 };
+    await publish();
+    await click('計測表示を折りたたむ');
+    expect(container.querySelector('.hi-pill-percent')).toBeNull();
+    expect(container.querySelector('.hi-pill')?.getAttribute('title')).toContain('79%');
+    await click('計測表示を広げる');
+    expect(container.querySelector('.hi-pill-percent')?.textContent).toBe('79%');
+    await click('計測表示を折りたたむ');
+    for (const value of [80, 120]) {
+      snap = { ...snap, load: value };
+      await publish();
+      expect(container.querySelector('.hi-pill-percent')?.textContent).toBe(`${value}%`);
+      expect(container.querySelector('.hi-collapse-btn')).toBeNull();
+      expect(container.querySelector('.hi-measure-collapsed')).toBeNull();
+    }
+    await click('作業モニターを開く');
+    await click('作業モニターを閉じる');
+    expect(container.querySelector('.hi-pill-percent')?.textContent).toBe('120%');
+    // 詳細を開閉しても折りたたみの選択を保ち、80%未満に戻ったら適用する。
+    snap = { ...snap, load: 30 };
+    await publish();
+    expect(container.querySelector('.hi-measure-collapsed')).not.toBeNull();
+    await click('計測表示を広げる');
+    expect(container.querySelector('.hi-pill-percent')?.textContent).toBe('30%');
+    await click('作業モニターを開く');
+    expect(container.querySelector('aside')).not.toBeNull();
+  });
+
   it('秒表示は操作による再描画で戻らず、倍速と新しい時計に追従する', async () => {
     snap = { ...snap, settings: { ...snap.settings, speed: 10 }, clock: { minute: 2.5, sampledAt: Date.now() }, state: { ...snap.state, minute: 2, breakState: { startedAt: 0, plannedMin: 10, memo: '' } } };
     await publish();
