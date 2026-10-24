@@ -13,16 +13,17 @@ AI でコードを書くのは速くなりました。でも人の仕事は消�
 私たち自身も、AI を並列で動かして開発するうちに、確認と判断が詰まって頭がぐったりする経験をしてきました。それなのに、休むタイミングは多くが時計か気合で決まっています。
 
 ### 製品説明（具体的な製品の説明）
-ChatGPT Web の上で動く Chrome 拡張です。AI とのやりとりの中身から「脳にかかる負担の目安」を器のようにためていきます。器がいっぱいになったら、**作業の途中ではなく区切りのいい瞬間に**「○分休もう」と声をかけます。
+**ChatGPT・Claude・Gemini** の Web 画面の上で動く Chrome 拡張です。AI とのやりとりの中身から「脳にかかる負担の目安」を器のようにためていきます。器がいっぱいになったら、**作業の途中ではなく区切りのいい瞬間に**「○分休もう」と声をかけます。
 
-1. ChatGPT でのやりとりから、**読む量・判断を求められた回数・確認や検証(エラーとの格闘)・話題の切替・作業時間**の 5 つを取ります
+1. AI チャットでのやりとりから、**読む量・判断を求められた回数・確認や検証(エラーとの格闘)・話題の切替・作業時間**の 5 つを取ります
 2. 5 つの平均で、器に負担がたまります。中身が重いと速く、軽いと遅くたまります
 3. 器が 80% を超えたら、生成中でも入力中でもない区切りを待って、休憩を提案します。どの要素がためたかの内訳(例: 「確認・検証 38% / 読む量 27% / 作業時間 20%」)と、それに合わせた声かけ(例: 「🐛 エラーと戦い続けてる! 確認続きでおつかれさま💪」)を出します
 4. 休憩中は円のタイマーとストレッチのピクトグラムを出します。休む前には「戻ったら何をする?」を 1 行メモできます
 5. 戻ったら、メモと励ましの声かけを出します。最後に「この休憩どうだった?」と聞きます
 
 - 判断と確認の一部は、Anthropic の API キーを使って会話を分類して取ります。キーが無くても、エラーの貼り付けや会話の切替などの手がかりで動きます(判断は「未計測」になります)
-- **なぜ ChatGPT Web から?** 一番多くの人が使う入口なので、まずここで確かめました。計算の部分は画面と切り離してあり、Claude Code の hooks を使えば承認待ちやテストの失敗まで取れます(今後の展望)
+- **対応しているサイト**: ChatGPT(chatgpt.com)・Claude(claude.ai)・Gemini(gemini.google.com)。サイトごとの違いは画面の読み取り方だけで、[`src/content/sites.ts`](src/content/sites.ts) の定義を足せば広げられます。計算・画面・分類はどのサイトでも同じです
+- **次はエディタとターミナルへ**: 計算の部分は画面と切り離してあり、VS Code の拡張や、Claude Code の hooks(承認待ちやテストの失敗まで取れる)にもつなげられます(今後の展望)
 
 ### 特長
 #### 1. 特長1
@@ -73,14 +74,16 @@ ChatGPT Web の上で動く Chrome 拡張です。AI とのやりとりの中身
 
 ### 独自技術
 #### ハッカソンで開発した独自機能・技術
-**Hack Day 中に作ったもの**
-<!-- Hack Day 中(10/24 09:20 以降)のコミットができたら、commit_id かファイルのリンクで書く -->
-- (記入予定)
+**Hack Day 中に作ったもの**(開会時刻のタグ `hackday-start` より後)
+- **画面を参照デザインに合わせて作り直し、休憩を本人が始める形にした**(PR #1): [`src/ui/App.tsx`](src/ui/App.tsx)、[`src/ui/useDockPosition.ts`](src/ui/useDockPosition.ts)、[`src/ui/Pictogram.tsx`](src/ui/Pictogram.tsx)
+- **Claude・Gemini に対応**(PR #2): 画面の読み取りをサイト別の定義([`src/content/sites.ts`](src/content/sites.ts))と共通の観測係([`src/content/observer.ts`](src/content/observer.ts))に分けた。新しい会話の 1 通目を取り逃さない
+- **記録を足した**(PR #2): どのサイトか、入力の始まりと終わり、生成の始まり、分類のトークン数
+- **記録の集計と、30 分タイマーとの比べ**(PR #3): [`scripts/analyze-log.ts`](scripts/analyze-log.ts)
 
 **開会前に作った土台**(事前の開発。評価の対象は上の Hack Day 中の差分です)
 - コミット fac9ea6・b7d760a・1f5a4ff(10/24 未明)
 - 負担の計算(2 層の器と区切りの判定): [`src/core/model.ts`](src/core/model.ts)、[`src/core/gate.ts`](src/core/gate.ts)。テストは [`src/core/model.test.ts`](src/core/model.test.ts)
-- ChatGPT の画面から手がかりを取る: [`src/content/chatgpt.ts`](src/content/chatgpt.ts)
+- ChatGPT の画面から手がかりを取る(Hack Day 中に `observer.ts`・`sites.ts` へ作り直した)
 - LLM で会話の出来事を抜き出す: [`src/shared/classifier.ts`](src/shared/classifier.ts)
 
 開発の仕方は [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) にあります。
