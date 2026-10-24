@@ -1,0 +1,87 @@
+{
+  "name": "hitoiki-vscode",
+  "displayName": "ひといき(VS Code 試作)",
+  "description": "VS Code での作業の中身から負担の目安を計算して、区切りで休憩を提案する(Chrome 拡張と同じ計算)",
+  "version": "0.0.0",
+  "publisher": "hitoiki",
+  "private": true,
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.93.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "hitoiki.breakNow",
+        "title": "ひといき: 今休む"
+      },
+      {
+        "command": "hitoiki.startDeferredBreak",
+        "title": "ひといき: 休憩を始める(次の区切りで、を選んだ後)"
+      },
+      {
+        "command": "hitoiki.endBreak",
+        "title": "ひといき: 休憩を終える"
+      },
+      {
+        "command": "hitoiki.reset",
+        "title": "ひといき: 器を 0 に戻す"
+      }
+    ],
+    "configuration": {
+      "title": "ひといき",
+      "properties": {
+        "hitoiki.speed": {
+          "type": "number",
+          "default": 1,
+          "minimum": 1,
+          "maximum": 600,
+          "description": "時計を何倍速にするか(デモ用。1 = 等倍)"
+        },
+        "hitoiki.threshold": {
+          "type": "number",
+          "default": 80,
+          "minimum": 10,
+          "maximum": 200,
+          "description": "休憩を提案する器のしきい値"
+        },
+        "hitoiki.breakScale": {
+          "type": "number",
+          "default": 1,
+          "enum": [
+            0.5,
+            1,
+            1.5
+          ],
+          "enumDescriptions": [
+            "短め",
+            "標準",
+            "長め"
+          ],
+          "description": "休憩の長さの調整(Chrome 版と同じ。器 80 で標準 10 分)"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "esbuild src/extension.ts --bundle --platform=node --format=cjs --target=node20 --external:vscode --outfile=dist/extension.js --sourcemap",
+    "compile": "tsc --noEmit",
+    "test": "vitest run",
+    "e2e": "npm run build && node test/e2e/run.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "@types/vscode": "^1.93.0",
+    "@vscode/test-electron": "^3.1.0",
+    "esbuild": "^0.28.2",
+    "typescript": "5.9",
+    "vitest": "^5.0.5"
+  }
+}
