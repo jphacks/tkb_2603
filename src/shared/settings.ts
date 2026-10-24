@@ -148,11 +148,20 @@ export type StoredLogEntry = LogEntry & { at: number; minute: number; site?: str
 
 const LOG_CAP = 5000;
 
-export async function appendLog(entry: LogEntry, minute: number, site?: string): Promise<void> {
-  const got = await browser.storage.local.get(KEYS.log);
-  const log = (got[KEYS.log] as StoredLogEntry[] | undefined) ?? [];
-  log.push({ ...entry, at: Date.now(), minute, site });
-  await browser.storage.local.set({ [KEYS.log]: log.slice(-LOG_CAP) });
+/** 書き込みを 1 本の鎖で順番に流す(読んでから書くので、同時に来ると片方が消えるため) */
+let logChain: Promise<void> = Promise.resolve();
+
+export function appendLog(entry: LogEntry, minute: number, site?: string): Promise<void> {
+  const at = Date.now();
+  logChain = logChain
+    .then(async () => {
+      const got = await browser.storage.local.get(KEYS.log);
+      const log = (got[KEYS.log] as StoredLogEntry[] | undefined) ?? [];
+      log.push({ ...entry, at, minute, site });
+      await browser.storage.local.set({ [KEYS.log]: log.slice(-LOG_CAP) });
+    })
+    .catch(() => {});
+  return logChain;
 }
 
 export async function loadLog(): Promise<StoredLogEntry[]> {
