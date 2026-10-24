@@ -8,4 +8,5 @@
 - 本文は保存しない。記録(`appendLog`)には件数・文字数・時刻・操作だけを入れる
 - 言わないこと(README・画面の文言): 「脳の疲労を測定」「最適な休憩時間」「世界初」
 - CSS は Shadow DOM の中で効く。`rem` ではなく px で書く
+- 開発の説明は `docs/DEVELOPMENT.md`。`README.md` は JPHACKS の提出用テンプレートなので消さない(中身は提出前に埋める)
 - コマンド: `npm run dev` / `npm run build` / `npm test` / `npx tsc --noEmit`
