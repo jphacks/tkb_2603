@@ -1,17 +1,17 @@
 # キーなしで使うための中継と公開手順
 
-Issue #4。Cloudflare WorkersとSQLite Durable Objectで分類を中継する。実装とローカルの確認は済んでいるが、公開URL・使用モデル・運用上限・実際の共有キーでの確認は公開担当者の操作で確定する。
+Issue #4。Cloudflare WorkersとSQLite Durable Objectで分類を中継する。公開URLと使用モデルを設定済み。公開反映と実際の共有キーでの動作確認は公開担当者の操作後に行う。
 
 ## 公開準備の状況
 
 2026-10-24に `https://hitoiki-proxy.gaku-fujio.workers.dev/health` が200で `{"ok":true,"enabled":false}` を返すことを確認した。Workerの公開・共有キーの登録は公開担当者が実施済み。拡張の接続先は `.env.example` に記載し、ローカルの `.env` に設定してビルドする。
 
-使用モデルと運用上限は確認中のため、分類は停止状態を維持する。この段階のZIPは接続先を設定した準備版であり、共有キーでの分類・実サイトの動作確認を終えてから配布する。
+2026-10-25に使用モデルを `claude-haiku-5-5` と確定した。ユーザーの指示により、金額の予算上限は当面設けず、乱用防止の回数制限は維持する。`proxy/wrangler.jsonc` はモデル指定と `CLASSIFICATION_ENABLED: "true"` に更新済みで、次のdeployから有効になる。共有キーでの分類・実サイトの動作確認を終えてからZIPを配布する。
 
-## 設定の初期状態
+## 公開設定と保護
 
-- `proxy/wrangler.jsonc` の `CLASSIFICATION_ENABLED` は `false`、`ANTHROPIC_MODEL` は空欄。公開しても分類APIは503を返し、Anthropicを呼ばない。
-- 暫定の回数上限は、1インストールにつき1分6回・UTC日100回、全体で1分30回・UTC日1000回。費用上限の保証ではない。モデルとAnthropic側の予算・RPM制限の確認後、運用に合わせて変更する。
+- `proxy/wrangler.jsonc` の `CLASSIFICATION_ENABLED` は `true`、`ANTHROPIC_MODEL` は `claude-haiku-5-5`。deployすると、同意した利用者の分類を受け付ける。停止するときは `CLASSIFICATION_ENABLED` を `false` にしてdeployする。
+- 回数上限は、1インストールにつき1分6回・UTC日100回、全体で1分30回・UTC日1000回。金額の予算上限とは独立し、費用上限の保証ではない。運用に合わせて変更する。
 - 利用者の匿名IDは認証ではない。作り直されることを前提に、すべてのIDで単一のDurable Objectの全体枠を共有する。
 - 枠は上流APIを呼ぶ前に原子的に予約し、上流の失敗でも消費する。UTC日・分の境界で復帰する。期限の切れたID別カウンターは削除する。
 - 中継に保存するのは匿名IDのカウンターだけ。会話本文・作業名・APIキーはSQLに保存せず、ログ出力もしない。Workersのobservabilityとinvocation logsも無効にする。
@@ -19,7 +19,7 @@ Issue #4。Cloudflare WorkersとSQLite Durable Objectで分類を中継する。
 
 ## 1. 公開担当者の準備
 
-Cloudflareへの登録とメール確認を済ませる。Anthropic側の担当者から専用キーを受け取り、使用するモデルの正確なAPI ID・専用ワークスペースの予算上限とRPMを確認する。キーをチャット・Issue・コード・WXT_/VITE_の環境変数へ貼り付けない。
+Cloudflareへの登録とメール確認を済ませる。Anthropic側の担当者から専用キーを受け取り、使用するモデルの正確なAPI IDと利用上限の方針を確認する。現在はユーザー指定で金額上限を設けない。キーをチャット・Issue・コード・WXT_/VITE_の環境変数へ貼り付けない。
 
 ## 2. Workerを停止状態で作成する
 
@@ -31,7 +31,7 @@ npm ci
 npx wrangler login
 ```
 
-ブラウザでCloudflareにログインして権限を許可する。次に、初期値が停止のままであることを確認して公開する。
+ブラウザでCloudflareにログインして権限を許可する。新しい環境で停止状態から準備する場合は、`proxy/wrangler.jsonc`の `CLASSIFICATION_ENABLED` を一度 `false` に変更してから公開する。
 
 ```powershell
 npm run deploy
@@ -47,11 +47,11 @@ npm run deploy
 npx wrangler secret put ANTHROPIC_API_KEY
 ```
 
-対話式の入力欄にキーを貼り付け、Enterで登録する。コマンド引数やファイルへキーの値を書かない。Cloudflareの画面からは、Worker → Settings → Variables and Secrets → Add → 種類Secret、名前 `ANTHROPIC_API_KEY` でも登録できる。Secretの登録は新しいバージョンの公開を伴うが、停止設定は維持する。
+対話式の入力欄にキーを貼り付け、Enterで登録する。コマンド引数やファイルへキーの値を書かない。Cloudflareの画面からは、Worker → Settings → Variables and Secrets → Add → 種類Secret、名前 `ANTHROPIC_API_KEY` でも登録できる。Secretの登録は新しいバージョンの公開を伴い、その時点の公開設定を維持する。
 
 ## 4. モデル・上限を確定して分類を有効にする
 
-担当者がモデルと予算・RPMを確認した後に、`proxy/wrangler.jsonc`の公開設定を変更する。
+担当者がモデルと利用上限の方針を確認した後に、`proxy/wrangler.jsonc`の公開設定を変更する。現在の確定値は上の「公開設定と保護」を参照。
 
 | 変数 | 設定内容 |
 | --- | --- |
@@ -127,3 +127,5 @@ npm run build  # dry-run。公開しない
 実際のローカルWorkerとSQLite Durable ObjectによるHTTP検証は、`proxy/`で `npm run dev:test` を起動し、別のターミナルの同じフォルダで `node test/http-check.mjs` を実行する。Anthropicへは接続しない。このHTTP検証をやり直すときは、日次のカウンターが残るため、新しい `--persist-to` の場所で起動する。
 
 公式資料: [Secrets](https://developers.cloudflare.com/workers/configuration/secrets/)、[Durable Objects](https://developers.cloudflare.com/durable-objects/get-started/)、[SQLite transactionSync](https://developers.cloudflare.com/durable-objects/api/sqlite-storage-api/)、[構造化出力](https://platform.claude.com/docs/en/build-with-claude/structured-outputs)、[WXT環境変数](https://wxt.dev/guide/essentials/config/environment-variables.html)、[AnthropicのAPI保存期間](https://privacy.claude.com/en/articles/7996866-how-long-do-you-store-my-organization-s-data)。
+
+モデルIDと構造化出力の互換性は [Haiku 5.5移行ガイド](https://platform.claude.com/docs/en/models/haiku-5-5/migration-guide) と上の構造化出力の資料で確認した。
