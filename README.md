@@ -4,6 +4,8 @@
 
 <!-- デモ動画ができたら、上の画像と YouTube の URL を差し替える -->
 
+**試す: [入れ方と配布ページ](https://jphacks.github.io/tkb_2603-demo/)**(Chrome 版の zip と VS Code 版の .vsix は [Releases](https://github.com/jphacks/tkb_2603/releases/latest))
+
 ## 製品概要
 ### 背景(製品開発のきっかけ、課題等）
 AI でコードを書くのは速くなりました。でも人の仕事は消えず、AI が出したものを**読んで、確かめて、判断する**側に移りました。速くなった分、こなす量も増えています。
