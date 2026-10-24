@@ -3,13 +3,15 @@
     "type": "observation",
     "kind": "typing_start",
     "at": 1792803600000,
-    "minute": 0
+    "minute": 0,
+    "site": "chatgpt"
   },
   {
     "type": "observation",
     "kind": "typing_end",
     "at": 1792803660000,
-    "minute": 1
+    "minute": 1,
+    "site": "chatgpt"
   },
   {
     "type": "observation",
@@ -18,13 +20,15 @@
       "chars": 120
     },
     "at": 1792803660000,
-    "minute": 1
+    "minute": 1,
+    "site": "chatgpt"
   },
   {
     "type": "observation",
     "kind": "generation_start",
     "at": 1792803666000,
-    "minute": 1.1
+    "minute": 1.1,
+    "site": "chatgpt"
   },
   {
     "type": "observation",
@@ -35,7 +39,8 @@
       "continuation": false
     },
     "at": 1792803720000,
-    "minute": 2
+    "minute": 2,
+    "site": "chatgpt"
   },
   {
     "type": "classify",
@@ -43,7 +48,10 @@
     "model": "claude-opus-5-5",
     "ms": 1800,
     "at": 1792803750000,
-    "minute": 2.5
+    "minute": 2.5,
+    "site": "chatgpt",
+    "inputTokens": 2000,
+    "outputTokens": 500
   },
   {
     "type": "observation",
@@ -54,7 +62,8 @@
       "shift": false
     },
     "at": 1792803750000,
-    "minute": 2.5
+    "minute": 2.5,
+    "site": "chatgpt"
   },
   {
     "type": "observation",
@@ -63,13 +72,15 @@
       "chars": 40
     },
     "at": 1792805280000,
-    "minute": 28
+    "minute": 28,
+    "site": "chatgpt"
   },
   {
     "type": "observation",
     "kind": "generation_start",
     "at": 1792805340000,
-    "minute": 29
+    "minute": 29,
+    "site": "chatgpt"
   },
   {
     "type": "observation",
@@ -80,7 +91,8 @@
       "continuation": false
     },
     "at": 1792805460000,
-    "minute": 31
+    "minute": 31,
+    "site": "chatgpt"
   },
   {
     "type": "classify",
@@ -89,7 +101,8 @@
     "ms": 30000,
     "error": "timeout",
     "at": 1792805490000,
-    "minute": 31.5
+    "minute": 31.5,
+    "site": "chatgpt"
   },
   {
     "type": "prompt_shown",
@@ -98,13 +111,15 @@
     "waitedSec": 45,
     "top": "decision",
     "at": 1792806000000,
-    "minute": 40
+    "minute": 40,
+    "site": "chatgpt"
   },
   {
     "type": "prompt_action",
     "action": "next_breakpoint",
     "at": 1792806012000,
-    "minute": 40.2
+    "minute": 40.2,
+    "site": "chatgpt"
   },
   {
     "type": "prompt_shown",
@@ -113,13 +128,15 @@
     "waitedSec": 15,
     "top": "reading",
     "at": 1792806240000,
-    "minute": 44
+    "minute": 44,
+    "site": "chatgpt"
   },
   {
     "type": "prompt_action",
     "action": "now",
     "at": 1792806246000,
-    "minute": 44.1
+    "minute": 44.1,
+    "site": "chatgpt"
   },
   {
     "type": "break_start",
@@ -127,7 +144,8 @@
     "hasMemo": true,
     "load": 85,
     "at": 1792806246000,
-    "minute": 44.1
+    "minute": 44.1,
+    "site": "chatgpt"
   },
   {
     "type": "break_end",
@@ -135,13 +153,15 @@
     "actualMin": 5,
     "completed": true,
     "at": 1792806546000,
-    "minute": 49.1
+    "minute": 49.1,
+    "site": "chatgpt"
   },
   {
     "type": "feedback",
     "value": "good",
     "at": 1792806552000,
-    "minute": 49.2
+    "minute": 49.2,
+    "site": "chatgpt"
   },
   {
     "type": "observation",
@@ -150,13 +170,15 @@
       "chars": 200
     },
     "at": 1792806900000,
-    "minute": 55
+    "minute": 55,
+    "site": "claude"
   },
   {
     "type": "observation",
     "kind": "generation_start",
     "at": 1792806912000,
-    "minute": 55.2
+    "minute": 55.2,
+    "site": "claude"
   },
   {
     "type": "observation",
@@ -167,27 +189,33 @@
       "continuation": false
     },
     "at": 1792807080000,
-    "minute": 58
+    "minute": 58,
+    "site": "claude"
   },
   {
     "type": "classify",
     "ok": true,
-    "model": "claude-opus-5-5",
+    "model": "claude-haiku-5-5",
     "ms": 2200,
     "at": 1792807110000,
-    "minute": 58.5
+    "minute": 58.5,
+    "site": "claude",
+    "inputTokens": 3000,
+    "outputTokens": 1000
   },
   {
     "type": "observation",
     "kind": "typing_start",
     "at": 1792807140000,
-    "minute": 59
+    "minute": 59,
+    "site": "claude"
   },
   {
     "type": "observation",
     "kind": "typing_end",
     "at": 1792807260000,
-    "minute": 61
+    "minute": 61,
+    "site": "claude"
   },
   {
     "type": "prompt_shown",
@@ -202,7 +230,8 @@
     "type": "prompt_action",
     "action": "decline",
     "at": 1792807386000,
-    "minute": 63.1
+    "minute": 63.1,
+    "site": "claude"
   },
   {
     "type": "break_start",
@@ -210,7 +239,8 @@
     "hasMemo": false,
     "load": 81,
     "at": 1792807500000,
-    "minute": 65
+    "minute": 65,
+    "site": "claude"
   },
   {
     "type": "break_end",
@@ -218,12 +248,14 @@
     "actualMin": 2,
     "completed": false,
     "at": 1792807620000,
-    "minute": 67
+    "minute": 67,
+    "site": "claude"
   },
   {
     "type": "feedback",
     "value": "unneeded",
     "at": 1792807626000,
-    "minute": 67.1
+    "minute": 67.1,
+    "site": "claude"
   }
 ]
