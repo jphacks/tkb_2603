@@ -56,7 +56,7 @@ function Options() {
           onClick={async () => {
             if (confirm('器の状態と記録を消します。よろしいですか?')) {
               await clearData();
-              setSaved('記録を消しました(ChatGPT のタブを再読み込みしてください)');
+              setSaved('記録を消しました(AI チャットのタブを再読み込みしてください)');
             }
           }}
         >

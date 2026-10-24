@@ -5,8 +5,8 @@ export default defineConfig({
   modules: ['@wxt-dev/module-react'],
   manifest: {
     name: 'ひといき',
-    description: 'ChatGPT での作業の中身から負担の目安を計算して、区切りで休憩を提案します',
+    description: 'AI チャット(ChatGPT・Claude・Gemini)での作業の中身から負担の目安を計算して、休憩のタイミングを提案します',
     permissions: ['storage'],
-    host_permissions: ['https://chatgpt.com/*', 'https://api.anthropic.com/*'],
+    host_permissions: ['https://chatgpt.com/*', 'https://claude.ai/*', 'https://gemini.google.com/*', 'https://api.anthropic.com/*'],
   },
 });

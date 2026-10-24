@@ -1,4 +1,4 @@
-// 器を動かす係。ChatGPT のタブの中で、計算上の 1 分ごとに tick する(service worker は 30 秒で止まるため)。
+// 器を動かす係。AI チャット(ChatGPT・Claude・Gemini)のタブの中で、計算上の 1 分ごとに tick する(service worker は 30 秒で止まるため)。
 // デモの倍速では、実時間 60 秒 ÷ speed ごとに 1 分進める。同じ計算を通す。
 import { applyPromptAction, type GateContext, type PromptAction, shouldPrompt } from '../core/gate';
 import {
@@ -27,7 +27,8 @@ import {
   saveEngine,
   type Settings,
 } from '../shared/settings';
-import { ChatGptObserver } from './chatgpt';
+import { ChatObserver } from './observer';
+import { detectSite } from './sites';
 
 export interface PromptInfo {
   load: number;
@@ -51,7 +52,7 @@ export interface UiSnapshot {
   prompt: PromptInfo | null;
   finishedBreak: FinishedBreak | null;
   confirmEndBreak: boolean;
-  diagnostics: ChatGptObserver['diagnostics'];
+  diagnostics: ChatObserver['diagnostics'];
   lastClassify: { ok: boolean; model: string; ms: number; error?: string } | null;
 }
 
@@ -60,7 +61,7 @@ type Listener = (snap: UiSnapshot) => void;
 export class Runner {
   private state!: EngineState;
   private settings!: Settings;
-  private observer: ChatGptObserver;
+  private observer: ChatObserver;
   private listeners = new Set<Listener>();
   private tickTimer: number | null = null;
   private gateTimer: number | null = null;
@@ -76,7 +77,7 @@ export class Runner {
   private lastTickReal = Date.now();
 
   constructor() {
-    this.observer = new ChatGptObserver({
+    this.observer = new ChatObserver(detectSite(location.hostname), {
       onPromptSent: (text) => this.onPromptSent(text),
       onResponseDone: (text, userText, continuation) => this.onResponseDone(text, userText, continuation),
       onErrorPaste: (lines) => {
@@ -88,6 +89,10 @@ export class Runner {
         void this.log({ type: 'observation', kind: 'conversation_switch' });
       },
       onActivity: () => this.push({ kind: 'activity', t: this.state.minute }),
+      // 記録だけ(計算には使わない)。30 分タイマーとの比べに使う
+      onGenerationStart: () => void this.logIfEnabled({ type: 'observation', kind: 'generation_start' }),
+      onTypingStart: () => void this.logIfEnabled({ type: 'observation', kind: 'typing_start' }),
+      onTypingEnd: () => void this.logIfEnabled({ type: 'observation', kind: 'typing_end' }),
     });
   }
 
@@ -179,7 +184,16 @@ export class Runner {
   }
 
   private async log(entry: LogEntry): Promise<void> {
-    await appendLog(entry, this.state.minute);
+    await appendLog(entry, this.state.minute, this.observer.site.id);
+  }
+
+  private async logIfEnabled(entry: LogEntry): Promise<void> {
+    if (this.settings?.enabled) await this.log(entry);
+  }
+
+  /** 常駐ボタンの位置合わせに使う、入力欄の外枠(サイトごとに違う) */
+  composerContainer(): HTMLElement | null {
+    return this.observer.composerContainer();
   }
 
   /** 表に出ているタブが器を持つ(ほかのタブは受け箱に出来事を足すだけ) */
@@ -394,7 +408,7 @@ export class Runner {
     void browser.runtime.sendMessage({ type: 'open_options' });
   }
 
-  // ---- ChatGPT からの出来事 ----
+  // ---- AI チャットからの出来事 ----
 
   private onPromptSent(text: string): void {
     this.push({ kind: 'prompt_sent', t: this.state.minute, chars: text.length });
@@ -425,7 +439,15 @@ export class Runner {
     this.lastClassify = res.ok
       ? { ok: true, model: res.model, ms: res.ms }
       : { ok: false, model: res.model, ms: res.ms, error: res.error };
-    void this.log({ type: 'classify', ok: res.ok, model: res.model, ms: res.ms, error: res.ok ? undefined : res.error });
+    void this.log({
+      type: 'classify',
+      ok: res.ok,
+      model: res.model,
+      ms: res.ms,
+      error: res.ok ? undefined : res.error,
+      inputTokens: res.ok ? res.inputTokens : undefined,
+      outputTokens: res.ok ? res.outputTokens : undefined,
+    });
     // 使えなかった時は、内部で判断を「未計測」とする(器は ÷5 のまま遅めにたまる)
     this.state.llmAvailable = res.ok;
     if (!res.ok) return this.emit();

@@ -9,9 +9,11 @@ vi.mock('../shared/settings', async (original) => ({
   loadEngine: vi.fn(), loadSettings: vi.fn(), saveEngine: vi.fn(), appendLog: vi.fn(),
   drainInbox: vi.fn(), onEngineChanged: vi.fn(), onSettingsChanged: vi.fn(), onInboxChanged: vi.fn(),
 }));
-vi.mock('./chatgpt', () => ({
-  ChatGptObserver: class {
-    diagnostics = { matched: {}, assistantCount: 0, userCount: 0, generating: false, lastResponseChars: 0, lastResponseHead: '', completionMethod: null };
+vi.mock('./observer', () => ({
+  ChatObserver: class {
+    site = { id: 'chatgpt' };
+    composerContainer() { return null; }
+    diagnostics = { site: 'chatgpt', matched: {}, assistantCount: 0, userCount: 0, generating: false, lastResponseChars: 0, lastResponseHead: '', completionMethod: null };
     lastResponseDoneAt = null;
     start() {}
     isGenerating() { return false; }
