@@ -2,7 +2,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { ClassifyResult } from './messages';
 
-import { CLASSIFICATION_SYSTEM as SYSTEM, CLASSIFICATION_SCHEMA as SCHEMA, clip } from './classification';
+import { CLASSIFICATION_SYSTEM as SYSTEM, CLASSIFICATION_SCHEMA as SCHEMA, clip, isClassifyResult } from './classification';
 
 /** サーバー側のフォールバックを使える(Opus 5.5 / Sonnet 5.5)。Haiku 5.5 には無い */
 const FALLBACK_MODELS = new Set(['claude-opus-5-5', 'claude-sonnet-5-5']);
@@ -50,8 +50,10 @@ export async function classifyExchange(opts: {
   if (response.stop_reason === 'max_tokens') throw new Error('truncated');
   const text = response.content.find((b) => b.type === 'text');
   if (!text || text.type !== 'text') throw new Error('no text block');
+  const result: unknown = JSON.parse(text.text);
+  if (!isClassifyResult(result)) throw new Error('invalid_result');
   return {
-    result: JSON.parse(text.text) as ClassifyResult,
+    result,
     inputTokens: response.usage.input_tokens,
     outputTokens: response.usage.output_tokens,
   };
