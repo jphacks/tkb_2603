@@ -9,7 +9,7 @@ ChatGPT Web での作業の**中身**(読む量・判断・確認・検証・切
 2. `npm run build`。`.output/chrome-mv3/` ができます
 3. Chrome で `chrome://extensions` を開き、「デベロッパーモード」をオンにして「パッケージ化されていない拡張機能を読み込む」から `.output/chrome-mv3/` を選びます
 4. 拡張の「詳細」→「拡張機能のオプション」を開き、Anthropic の API キーを入れて「キーを保存」を押します。キーが無くても動きますが、判断は「未計測」になります
-5. https://chatgpt.com・https://claude.ai・https://gemini.google.com のどれかを開くと、右下に「計測中 ○%」が出ます。押すと右側に作業モニターが開きます。「診断」で、画面の取り方がうまくいっているか確かめられます。「休憩する」で休憩画面も試せます
+5. https://chatgpt.com・https://claude.ai・https://gemini.google.com のどれかを開くと、右下に「計測中 ○%」が出ます。押すと右側に作業モニターが開きます。「診断」で、画面の取り方がうまくいっているか確かめられます(`src/shared/flags.ts` の `DEMO` を true にした時だけ出ます。時計の速さ・たまる速さ g の設定も同じ)。「休憩する」で休憩画面も試せます
 
 開発中は `npm run dev` で、HMR つきの Chrome が立ち上がります。テストは `npm test` です。
 

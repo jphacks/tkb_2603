@@ -2,15 +2,14 @@
 // 使い方: node scripts/analyze-log.ts <file.json>
 import { readFileSync } from 'node:fs';
 import type { StoredLogEntry } from '../src/shared/settings.ts';
-import { DEFAULT_PARAMS } from '../src/core/types.ts';
+import { compareTimer, SESSION_GAP_MIN, TIMER_INTERVAL_MIN } from '../src/shared/timerCompare.ts';
+
+// 30 分タイマーとの比べは、画面(パネルの詳細)とこのスクリプトの両方で使うので src/shared に置いている
+export { compareTimer, timerTicks } from '../src/shared/timerCompare.ts';
 
 type Entry<T extends StoredLogEntry['type']> = Extract<StoredLogEntry, { type: T }>;
 
 const MIN = 60_000;
-/** 30 分ごとのタイマーの間隔 */
-export const TIMER_INTERVAL_MIN = 30;
-/** この時間記録が無ければ別の作業の回とみなす(器を 0 に戻す時間と同じ) */
-export const SESSION_GAP_MIN = DEFAULT_PARAMS.dayResetIdleMin;
 
 /** 100 万トークンあたりの単価(USD、入力 / 出力) */
 export const PRICES: Record<string, { input: number; output: number }> = {
@@ -150,95 +149,6 @@ export function summarize(log: StoredLogEntry[]): Summary {
     responsesDone: observations(log, 'response_done').length,
     bySite: siteBreakdown(log),
     cost: classifyCost(log),
-  };
-}
-
-// ---- 30 分ごとのタイマーだったら ----
-
-export interface Interval {
-  start: number;
-  end: number;
-}
-
-/** start の出来事から、次の end の出来事までを区間にする。end が来なかったものは数えない */
-function pairIntervals(log: StoredLogEntry[], startKind: string, endKind: string): Interval[] {
-  const out: Interval[] = [];
-  let open: number | null = null;
-  for (const e of log) {
-    if (e.type !== 'observation') continue;
-    if (e.kind === startKind && open === null) open = e.at;
-    else if (e.kind === endKind && open !== null) {
-      out.push({ start: open, end: e.at });
-      open = null;
-    }
-  }
-  return out;
-}
-
-/** 回答を読む時間: response_done から、日本語 653 字/分 + 英語 238 語/分(core と同じ速さ) */
-function readingIntervals(log: StoredLogEntry[]): Interval[] {
-  return observations(log, 'response_done').map((e) => {
-    const min = num(e.detail?.jaChars) / DEFAULT_PARAMS.jaCharsPerMin + num(e.detail?.enWords) / DEFAULT_PARAMS.enWordsPerMin;
-    return { start: e.at, end: e.at + min * MIN };
-  });
-}
-
-/** 記録が SESSION_GAP_MIN 以上途切れたところで分け、各回の初めから 30 分ごとの時刻を作る */
-export function timerTicks(log: StoredLogEntry[], intervalMin = TIMER_INTERVAL_MIN): number[] {
-  const times = log.map((e) => e.at).sort((a, b) => a - b);
-  const ticks: number[] = [];
-  let i = 0;
-  while (i < times.length) {
-    const start = times[i]!;
-    let end = start;
-    while (i + 1 < times.length && times[i + 1]! - times[i]! < SESSION_GAP_MIN * MIN) end = times[++i]!;
-    i++;
-    for (let t = start + intervalMin * MIN; t <= end; t += intervalMin * MIN) ticks.push(t);
-  }
-  return ticks;
-}
-
-export interface TimerComparison {
-  ticks: number;
-  generating: number;
-  typing: number;
-  reading: number;
-  /** どれか 1 つでも当たった数(重なりは 1 回と数える) */
-  anyBusy: number;
-  /** 記録にその出来事があったか(無いと 0 になるのは当然なので、表で区別する) */
-  hasGeneration: boolean;
-  hasTyping: boolean;
-}
-
-const inside = (t: number, xs: Interval[]) => xs.some((x) => x.start <= t && t < x.end);
-
-export function compareTimer(log: StoredLogEntry[], intervalMin = TIMER_INTERVAL_MIN): TimerComparison {
-  const sorted = [...log].sort((a, b) => a.at - b.at);
-  const gen = pairIntervals(sorted, 'generation_start', 'response_done');
-  const typ = pairIntervals(sorted, 'typing_start', 'typing_end');
-  const read = readingIntervals(sorted);
-  const ticks = timerTicks(sorted, intervalMin);
-  let generating = 0;
-  let typing = 0;
-  let reading = 0;
-  let anyBusy = 0;
-  for (const t of ticks) {
-    const g = inside(t, gen);
-    const ty = inside(t, typ);
-    const r = inside(t, read);
-    if (g) generating++;
-    if (ty) typing++;
-    if (r) reading++;
-    if (g || ty || r) anyBusy++;
-  }
-  return {
-    ticks: ticks.length,
-    generating,
-    typing,
-    reading,
-    anyBusy,
-    hasGeneration: observations(sorted, 'generation_start').length > 0,
-    hasTyping: observations(sorted, 'typing_start').length > 0,
   };
 }
 

@@ -3,11 +3,13 @@ import { useEffect, useRef, useState, type KeyboardEvent, type RefObject } from 
 import { breakMinutes, contributionShares } from '../core/model';
 import { ELEMENT_KEYS, ELEMENT_LABELS } from '../core/types';
 import type { Runner, UiSnapshot } from '../content/runner';
+import { DEMO } from '../shared/flags';
 import { endCopy, promptCopy, SNOOZE_COPY, STRETCHES } from './copy';
 import { Pictogram } from './Pictogram';
 import { Icon } from './Icon';
 import { loadFillPercent, loadLevel, loadPercent } from './presentation';
 import { useDockPosition } from './useDockPosition';
+import { useTodayTimerSummary } from './useTodayTimerSummary';
 
 const HIGH_UF = 30;
 
@@ -143,6 +145,7 @@ function PromptCard({ snap, onAction }: { snap: UiSnapshot; onAction: (action: '
 }
 
 function Detail({ snap, runner, onClose }: { snap: UiSnapshot; runner: Runner; onClose: () => void }) {
+  const timer = useTodayTimerSummary();
   const shares = contributionShares(snap.state);
   const ufFill = Math.min(100, Math.max(0, snap.state.uf));
   const rfFill = Math.min(100 - ufFill, Math.max(0, snap.state.rf));
@@ -195,11 +198,12 @@ function Detail({ snap, runner, onClose }: { snap: UiSnapshot; runner: Runner; o
           <Sparkline history={snap.state.history} minute={snap.state.minute} />
           <div className="hi-chart-labels"><span>30分前</span><span>いま</span></div>
         </details>
-        <details className="hi-diagnostics">
+        {timer && <p className="hi-muted hi-timer-compare">30 分ごとのタイマーだったら、今日 {timer.ticks} 回のうち {timer.interrupted} 回は作業の途中に割り込んでいました。ひといきは {timer.prompts} 回、区切りで提案しました。</p>}
+        {DEMO && <details className="hi-diagnostics">
           <summary>診断</summary>
           {!snap.state.llmAvailable && <p className="hi-muted">判断は未計測です。確認・切替は画面から取れる手がかりで計測しています。</p>}
           <Diagnostics snap={snap} />
-        </details>
+        </details>}
       </div>
       <footer className="hi-detail-footer">
         <p className="hi-note">ログから観測した作業要求の参考表示です。</p>
