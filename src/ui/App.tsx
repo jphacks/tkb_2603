@@ -1,11 +1,12 @@
-// ChatGPT の画面に重ねる UI(がくさんの UI 案の 4 状態: 通常 / 休憩の提案 / 詳細 / 休憩中)。
-// 見た目はがくさんの案に合わせて後で整える。今は計算が動いている様子が分かることを優先する。
-import { useEffect, useMemo, useState } from 'react';
-import { contributionShares } from '../core/model';
+// ChatGPT に重ねる4状態のUI。計算・保存・休憩の操作は Runner に任せる。
+import { useEffect, useRef, useState, type KeyboardEvent, type RefObject } from 'react';
+import { breakMinutes, contributionShares } from '../core/model';
 import { ELEMENT_KEYS, ELEMENT_LABELS } from '../core/types';
 import type { Runner, UiSnapshot } from '../content/runner';
-import { AUTO_TIMER_COPY, endCopy, promptCopy, SNOOZE_COPY, STRETCHES, type StretchId } from './copy';
+import { endCopy, promptCopy, SNOOZE_COPY, STRETCHES } from './copy';
 import { Pictogram } from './Pictogram';
+import { Icon } from './Icon';
+import { loadLevel, loadPercent } from './presentation';
 
 const HIGH_UF = 30;
 
@@ -13,162 +14,186 @@ export function App({ runner }: { runner: Runner }) {
   const [snap, setSnap] = useState<UiSnapshot | null>(null);
   const [open, setOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const theme = usePageTheme();
+  const pill = useRef<HTMLButtonElement>(null);
   useEffect(() => runner.subscribe(setSnap), [runner]);
   useEffect(() => {
     if (!toast) return;
     const id = window.setTimeout(() => setToast(null), 3500);
     return () => clearTimeout(id);
   }, [toast]);
-  if (!snap || !snap.settings.enabled) return null;
 
-  const onBreak = !!snap.state.breakState;
+  const enabled = !!snap?.settings.enabled;
+  const onBreak = !!snap?.state.breakState;
+  const panelOpen = enabled && open && !onBreak;
+  // 広い画面では会話の領域を確保。閉じる・無効化・アンマウント時に解除。
+  useEffect(() => {
+    if (!panelOpen) return;
+    const style = document.createElement('style');
+    style.textContent = '@media (min-width: 900px) { html body { width: calc(100% - 384px) !important; } }';
+    document.head.append(style);
+    return () => style.remove();
+  }, [panelOpen]);
+
+  if (!snap || !enabled) return null;
+  const closePanel = () => {
+    setOpen(false);
+    window.requestAnimationFrame(() => pill.current?.focus());
+  };
+  const respond = (action: 'now' | 'next_breakpoint' | 'decline') => {
+    runner.respondToPrompt(action);
+    if (action !== 'now') setToast(SNOOZE_COPY[action]);
+  };
   return (
-    <div className="hi-root">
-      {snap.settings.speed > 1 && <div className="hi-demo">デモ: {snap.settings.speed}倍速</div>}
-      {snap.prompt && !onBreak && (
-        <PromptCard
-          snap={snap}
-          onAction={(a, memo) => {
-            runner.respondToPrompt(a, memo);
-            if (a !== 'now') setToast(SNOOZE_COPY[a]);
-          }}
-        />
-      )}
+    <div className="hi-root" data-theme={theme} data-load-level={loadLevel(snap.load)}>
+      {snap.settings.speed > 1 && <div className="hi-demo">デモ · {snap.settings.speed}倍速</div>}
+      {snap.prompt && !onBreak && !panelOpen && <PromptCard snap={snap} onAction={respond} />}
       {onBreak && <BreakOverlay snap={snap} runner={runner} />}
-      {snap.finishedBreak && !onBreak && <Welcome snap={snap} runner={runner} />}
-      {open && !onBreak && <Detail snap={snap} runner={runner} onClose={() => setOpen(false)} />}
-      {toast && <div className="hi-toast">{toast}</div>}
-      <button className="hi-pill" onClick={() => setOpen(!open)} title="ひといき: 作業の負担の目安">
-        <Ring value={snap.load} threshold={snap.settings.threshold} />
-        <span className="hi-pill-label">ひといき</span>
-        <span className="hi-pill-value">{Math.round(snap.load)}%</span>
-      </button>
+      {snap.finishedBreak && !onBreak && !panelOpen && <Welcome snap={snap} runner={runner} />}
+      {panelOpen && <Detail snap={snap} runner={runner} onClose={closePanel} />}
+      {toast && <div className="hi-toast" role="status">{toast}</div>}
+      {!onBreak && !panelOpen && (
+        <div className="hi-dock">
+          {snap.state.prompt.waitingForUser && <button className="hi-ready" onClick={() => runner.startDeferredBreak()}>
+            <Icon name="leaf" /><span>区切りがついた！</span><span className="hi-ready-minutes">{breakMinutes(snap.load, snap.settings.breakScale)}分休む</span>
+          </button>}
+          <button ref={pill} className="hi-pill" onClick={() => setOpen(true)} aria-label="作業モニターを開く" aria-expanded={false}>
+            <LoadRing value={snap.load} /><span>計測中</span><strong className="hi-pill-percent">{loadPercent(snap.load)}%</strong><Icon name="chevron" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
-function Ring({ value, threshold }: { value: number; threshold: number }) {
-  const r = 9;
-  const c = 2 * Math.PI * r;
-  const color = value >= threshold ? 'var(--hi-warn)' : 'var(--hi-accent)';
-  return (
-    <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden>
-      <circle cx="12" cy="12" r={r} fill="none" stroke="var(--hi-track)" strokeWidth="3" />
-      <circle
-        cx="12"
-        cy="12"
-        r={r}
-        fill="none"
-        stroke={color}
-        strokeWidth="3"
-        strokeDasharray={`${(c * Math.min(100, value)) / 100} ${c}`}
-        transform="rotate(-90 12 12)"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
+/** ChatGPTの明示的なテーマを優先。指定がなければOS設定に従う。 */
+function usePageTheme(): 'light' | 'dark' {
+  const read = () => {
+    for (const element of [document.documentElement, document.body]) {
+      if (element?.classList.contains('dark') || element?.getAttribute('data-theme') === 'dark') return 'dark';
+      if (element?.classList.contains('light') || element?.getAttribute('data-theme') === 'light') return 'light';
+      if (element?.style.colorScheme === 'dark') return 'dark';
+      if (element?.style.colorScheme === 'light') return 'light';
+    }
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  };
+  const [theme, setTheme] = useState<'light' | 'dark'>(read);
+  useEffect(() => {
+    const update = () => setTheme(read());
+    const observer = new MutationObserver(update);
+    for (const element of [document.documentElement, document.body]) {
+      if (element) observer.observe(element, { attributes: true, attributeFilter: ['class', 'data-theme', 'style'] });
+    }
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    media.addEventListener('change', update);
+    return () => { observer.disconnect(); media.removeEventListener('change', update); };
+  }, []);
+  return theme;
 }
 
-function PromptCard({ snap, onAction }: { snap: UiSnapshot; onAction: (a: 'now' | 'next_breakpoint' | 'decline', memo: string) => void }) {
-  const p = snap.prompt!;
-  const copy = promptCopy(p.top, p.minutes, snap.state.uf >= HIGH_UF);
-  const [memo, setMemo] = useState('');
+function LoadRing({ value }: { value: number }) {
+  const circumference = 2 * Math.PI * 8;
+  return <svg className="hi-load-ring" width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
+    <circle cx="11" cy="11" r="8" fill="none" stroke="var(--hi-track)" strokeWidth="3" />
+    <circle cx="11" cy="11" r="8" fill="none" stroke="var(--hi-load-color)" strokeWidth="3" strokeDasharray={`${circumference * loadPercent(value) / 100} ${circumference}`} transform="rotate(-90 11 11)" strokeLinecap="round" />
+  </svg>;
+}
+
+function PromptCard({ snap, onAction }: { snap: UiSnapshot; onAction: (action: 'now' | 'next_breakpoint') => void }) {
+  const copy = promptCopy(snap.prompt!.top, snap.state.uf >= HIGH_UF);
+  const [bottom, setBottom] = useState(150);
+  const composerSelector = snap.diagnostics.matched.composer;
+  useEffect(() => {
+    // 観測側が見つけた入力欄を使い、入力欄が伸びても通知をその上に置く。
+    const composer = composerSelector ? document.querySelector(composerSelector) : null;
+    const anchor = composer?.closest('form') ?? composer;
+    if (!anchor) return;
+    const place = () => {
+      const bounds = anchor.getBoundingClientRect();
+      if (bounds.height > 0) setBottom(Math.max(150, window.innerHeight - bounds.top + 16));
+    };
+    const observer = new ResizeObserver(place);
+    observer.observe(anchor);
+    window.addEventListener('resize', place);
+    place();
+    return () => { observer.disconnect(); window.removeEventListener('resize', place); };
+  }, [composerSelector]);
   return (
-    <div className="hi-card hi-prompt" role="dialog" aria-label="休憩の提案">
-      <div className="hi-title">{copy.title}</div>
-      <div className="hi-body">{copy.body}</div>
-      <Reason snap={snap} />
-      <input
-        className="hi-input"
-        placeholder="戻ったら何をする?(1 行・任意)"
-        value={memo}
-        maxLength={80}
-        onChange={(e) => setMemo(e.target.value)}
-      />
-      <div className="hi-actions">
-        <button className="hi-btn hi-primary" onClick={() => onAction('now', memo)}>
-          今 {p.minutes} 分休む
-        </button>
-        <button className="hi-btn" onClick={() => onAction('next_breakpoint', '')}>
-          次の区切りで
-        </button>
-        <button className="hi-btn hi-ghost" onClick={() => onAction('decline', '')}>
-          今回は不要
-        </button>
+    <section className="hi-card hi-prompt" style={{ bottom }} role="status" aria-label="休憩の提案">
+      <div className="hi-head">
+        <div className="hi-heading"><Icon name="clock" /><h2>{copy.title}</h2></div>
+        <button className="hi-icon-btn" onClick={() => onAction('next_breakpoint')} aria-label="休憩の提案を閉じて開始ボタンを残す"><Icon name="close" /></button>
       </div>
-    </div>
-  );
-}
-
-/** どの要素がどれだけためたか(足し算なので、そのまま理由になる) */
-function Reason({ snap }: { snap: UiSnapshot }) {
-  const shares = contributionShares(snap.state);
-  if (!shares) return null;
-  const top = ELEMENT_KEYS.filter((k) => shares[k] > 0)
-    .sort((a, b) => shares[b] - shares[a])
-    .slice(0, 3);
-  return (
-    <div className="hi-reason">
-      {top.map((k) => (
-        <span key={k} className="hi-chip">
-          {ELEMENT_LABELS[k]} {Math.round(shares[k] * 100)}%
-        </span>
-      ))}
-    </div>
+      <p className="hi-prompt-body">{copy.body}</p>
+      <div className="hi-prompt-actions">
+        <button className="hi-btn hi-primary" onClick={() => onAction('now')}>今{breakMinutes(snap.load, snap.settings.breakScale)}分休む</button>
+        <button className="hi-btn" onClick={() => onAction('next_breakpoint')}>区切りがついたら休む</button>
+      </div>
+    </section>
   );
 }
 
 function Detail({ snap, runner, onClose }: { snap: UiSnapshot; runner: Runner; onClose: () => void }) {
   const shares = contributionShares(snap.state);
-  const llmOff = !snap.state.llmAvailable;
-  const [showDiag, setShowDiag] = useState(false);
+  const close = useRef<HTMLButtonElement>(null);
+  useEffect(() => { close.current?.focus({ preventScroll: true }); }, []);
   return (
-    <div className="hi-card hi-detail" role="dialog" aria-label="作業モニター">
-      <div className="hi-head">
-        <span className="hi-title">作業モニター</span>
-        <button className="hi-x" onClick={onClose} aria-label="閉じる">
-          ×
-        </button>
-      </div>
-      <div className="hi-gauge">
-        <div className="hi-gauge-bar">
-          <div className="hi-gauge-uf" style={{ width: `${snap.state.uf}%` }} />
-          <div className="hi-gauge-rf" style={{ width: `${Math.min(100 - snap.state.uf, snap.state.rf)}%` }} />
-          <div className="hi-gauge-th" style={{ left: `${snap.settings.threshold}%` }} />
+    <aside className="hi-detail" role="dialog" aria-label="作業モニター" onKeyDown={(event) => {
+      if (event.key === 'Escape') { event.stopPropagation(); onClose(); }
+    }}>
+      <header className="hi-head">
+        <div className="hi-heading"><Icon name="leaf" /><h1>作業モニター</h1></div>
+        <div className="hi-head-actions">
+          <button className="hi-icon-btn" onClick={() => runner.openOptions()} aria-label="設定を開く"><Icon name="settings" /></button>
+          <button ref={close} className="hi-icon-btn" onClick={onClose} aria-label="作業モニターを閉じる"><Icon name="close" /></button>
         </div>
-        <div className="hi-gauge-legend">
-          <span>器 {Math.round(snap.load)}%</span>
-          <span className="hi-muted">うち今日残る分 {Math.round(snap.state.uf)}%</span>
-        </div>
-      </div>
-      <div className="hi-subtitle">休憩してから、何がためたか</div>
-      {ELEMENT_KEYS.map((k) => (
-        <div key={k} className="hi-row">
-          <span className="hi-row-label">{ELEMENT_LABELS[k]}</span>
-          <div className="hi-bar">
-            <div className="hi-bar-fill" style={{ width: `${Math.round((shares?.[k] ?? 0) * 100)}%` }} />
+      </header>
+      <div className="hi-detail-content">
+        <span className="hi-status">計測中</span>
+        <h2 className="hi-detail-title">作業の負担の目安</h2>
+        <section className="hi-load-summary" aria-label="全体の器">
+          <div className="hi-load-heading"><span>全体の器</span><strong>{loadPercent(snap.load)}<small>%</small></strong></div>
+          <div className="hi-load-bar" role="meter" aria-label="全体の器" aria-valuenow={loadPercent(snap.load)} aria-valuemin={0} aria-valuemax={100}>
+            <div className="hi-load-uf" style={{ width: `${snap.state.uf}%` }} />
+            <div className="hi-load-rf" style={{ width: `${Math.min(100 - snap.state.uf, snap.state.rf)}%` }} />
+            <span className="hi-load-threshold" style={{ left: `${snap.settings.threshold}%` }} />
           </div>
-          <span className="hi-row-value">
-            {k === 'decision' && llmOff ? '未計測' : `${Math.round((shares?.[k] ?? 0) * 100)}%`}
-          </span>
+          <div className="hi-load-caption"><span>うち今日残る分 {loadPercent(snap.state.uf)}%</span><span>休憩の目安 {snap.settings.threshold}%</span></div>
+          {loadPercent(snap.load) >= 90 && <p className="hi-load-message">{loadPercent(snap.load) >= 100 ? '器がいっぱいです。区切りで休憩しましょう。' : '器がたまってきました。休憩を意識しましょう。'}</p>}
+        </section>
+        <h3 className="hi-breakdown-title">休憩してから、何がためたか</h3>
+        <p className="hi-breakdown-hint">各項目は、負担をためた要因の割合です。</p>
+        <div className="hi-meters">
+          {ELEMENT_KEYS.map((key) => {
+            const unmeasured = key === 'decision' && !snap.state.llmAvailable;
+            const percent = Math.round((shares?.[key] ?? 0) * 100);
+            return <div className="hi-meter" key={key}>
+              <span className="hi-meter-label">{ELEMENT_LABELS[key]}</span>
+              <div className="hi-bar" role="meter" aria-label={ELEMENT_LABELS[key]} aria-valuenow={unmeasured ? undefined : percent} aria-valuetext={unmeasured ? '未計測' : `${percent}%`} aria-valuemin={0} aria-valuemax={100}>
+                <div className="hi-bar-fill" style={{ width: `${unmeasured ? 0 : percent}%` }} />
+              </div>
+              <span className="hi-meter-percent">{unmeasured ? '未計測' : `${percent}%`}</span>
+            </div>;
+          })}
         </div>
-      ))}
-      <div className="hi-subtitle">直近 30 分の推移</div>
-      <Sparkline history={snap.state.history} threshold={snap.settings.threshold} />
-      <div className="hi-note">ログから推定した作業の負担の目安です。値は仮置きです。疲れの感じ方は、自分の感覚も大切に。</div>
-      <div className="hi-actions">
-        <button className="hi-btn hi-primary" onClick={() => { runner.startManualBreak(''); onClose(); }}>
-          休憩する
-        </button>
-        <button className="hi-btn" onClick={() => runner.openOptions()}>
-          設定
-        </button>
-        <button className="hi-btn hi-ghost" onClick={() => setShowDiag(!showDiag)}>
-          診断
-        </button>
+        <details className="hi-history">
+          <summary>推移を見る<span className="hi-muted">直近30分</span><Icon name="chevron" /></summary>
+          <p className="hi-history-hint">全体の器が、時間とともにどう変わったかを表示します。</p>
+          <Sparkline history={snap.state.history} minute={snap.state.minute} />
+          <div className="hi-chart-labels"><span>30分前</span><span>いま</span></div>
+        </details>
+        <details className="hi-diagnostics">
+          <summary>診断</summary>
+          {!snap.state.llmAvailable && <p className="hi-muted">判断は未計測です。確認・切替は画面から取れる手がかりで計測しています。</p>}
+          <Diagnostics snap={snap} />
+        </details>
       </div>
-      {showDiag && <Diagnostics snap={snap} />}
-    </div>
+      <footer className="hi-detail-footer">
+        <p className="hi-note">ログから観測した作業要求の参考表示です。</p>
+        <button className="hi-btn hi-primary hi-full" onClick={() => { snap.state.prompt.waitingForUser ? runner.startDeferredBreak() : runner.startManualBreak(''); onClose(); }}>{snap.state.prompt.waitingForUser ? '区切りがついた！ 休憩する' : '休憩する'}</button>
+        <p className="hi-footer-hint">疲れの感じ方は、自分の感覚も大切に。</p>
+      </footer>
+    </aside>
   );
 }
 
@@ -176,161 +201,105 @@ function Diagnostics({ snap }: { snap: UiSnapshot }) {
   const d = snap.diagnostics;
   return (
     <div className="hi-diag">
-      <div>回答の数: {d.assistantCount} / 送信の数: {d.userCount} / 生成中: {d.generating ? 'はい' : 'いいえ'}</div>
-      <div>最後の回答: {d.lastResponseChars} 文字「{d.lastResponseHead}…」(終わりの検出: {d.completionMethod ?? 'まだ'})</div>
+      <div>回答 {d.assistantCount} / 送信 {d.userCount} / 生成中 {d.generating ? 'はい' : 'いいえ'}</div>
+      <div>最後の回答: {d.lastResponseChars} 文字「{d.lastResponseHead}…」</div>
+      <div>終わりの検出: {d.completionMethod ?? 'まだ'}</div>
       <div>読む残り: {snap.state.readBacklogMin.toFixed(1)} 分 / 計算上の時刻: {snap.state.minute} 分</div>
-      {Object.entries(d.matched).map(([g, sel]) => (
-        <div key={g}>
-          {g}: <code>{sel ?? '見つからない'}</code>
-        </div>
-      ))}
-      <div>
-        分類:{' '}
-        {snap.lastClassify
-          ? snap.lastClassify.ok
-            ? `OK(${snap.lastClassify.model}、${snap.lastClassify.ms}ms)`
-            : `失敗(${snap.lastClassify.error})`
-          : snap.settings.hasApiKey
-            ? 'まだ'
-            : 'API キー未設定'}
-      </div>
+      {Object.entries(d.matched).map(([group, selector]) => <div key={group}>{group}: <code>{selector ?? '見つからない'}</code></div>)}
+      <div>分類: {snap.lastClassify ? snap.lastClassify.ok ? `OK（${snap.lastClassify.model}、${snap.lastClassify.ms}ms）` : `失敗（${snap.lastClassify.error}）` : snap.settings.hasApiKey ? 'まだ' : 'API キー未設定'}</div>
     </div>
   );
 }
 
-function Sparkline({ history, threshold }: { history: { t: number; load: number }[]; threshold: number }) {
-  const w = 260;
-  const h = 56;
-  const points = useMemo(() => {
-    if (history.length < 2) return '';
-    const t0 = history[0]!.t;
-    const t1 = history[history.length - 1]!.t;
-    const span = Math.max(1, t1 - t0);
-    return history.map((p) => `${((p.t - t0) / span) * w},${h - (p.load / 100) * h}`).join(' ');
-  }, [history]);
+function Sparkline({ history, minute }: { history: { t: number; load: number }[]; minute: number }) {
+  const points = history.map((point) => `${16 + ((point.t - (minute - 30)) / 30) * 304},${120 - (point.load / 100) * 104}`).join(' ');
   return (
-    <svg className="hi-spark" width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-label="器の推移">
-      <line x1="0" x2={w} y1={h - (threshold / 100) * h} y2={h - (threshold / 100) * h} className="hi-spark-th" />
-      {points && <polyline points={points} className="hi-spark-line" />}
-    </svg>
+    <div className="hi-chart">
+      <svg viewBox="0 0 336 136" width="336" height="136" className="hi-spark" role="img" aria-label="直近30分の負担の推移（0から100）">
+        {[24, 56, 88, 120].map((y) => <line key={y} x1="12" x2="324" y1={y} y2={y} className="hi-spark-grid" />)}
+        {history.length > 1 && <polyline points={points} className="hi-spark-line" />}
+        {history.length === 1 && <circle cx={16 + ((history[0]!.t - (minute - 30)) / 30) * 304} cy={120 - (history[0]!.load / 100) * 104} r="3" className="hi-spark-dot" />}
+      </svg>
+      {!history.length && <span className="hi-chart-empty">作業の記録がここに表示されます</span>}
+    </div>
   );
+}
+
+function trapFocus(event: KeyboardEvent<HTMLElement>) {
+  if (event.key !== 'Tab') return;
+  const items = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('button, input, summary, [tabindex="0"]')).filter((element) => element.getClientRects().length > 0);
+  const first = items[0];
+  const last = items.at(-1);
+  if (event.shiftKey && (event.target === first || event.target === event.currentTarget)) { event.preventDefault(); last?.focus(); }
+  else if (!event.shiftKey && event.target === last) { event.preventDefault(); first?.focus(); }
+}
+
+function useModalFocus(ref: RefObject<HTMLDivElement | null>) {
+  useEffect(() => {
+    const root = ref.current?.getRootNode() as Document | ShadowRoot;
+    const previous = root?.activeElement as HTMLElement | null;
+    ref.current?.focus({ preventScroll: true });
+    return () => { if (previous?.isConnected) previous.focus({ preventScroll: true }); };
+  }, [ref]);
 }
 
 function BreakOverlay({ snap, runner }: { snap: UiSnapshot; runner: Runner }) {
   const b = snap.state.breakState!;
-  const [stretch, setStretch] = useState<StretchId>('reach');
-  const [memo, setMemo] = useState(b.memo);
-  const elapsedMin = snap.state.minute - b.startedAt;
-  const remaining = Math.max(0, b.plannedMin - elapsedMin);
-  const progress = Math.min(1, elapsedMin / Math.max(1, b.plannedMin));
-  const line = STRETCHES.find((s) => s.id === stretch)?.line ?? '';
-  const autoMode = snap.settings.mode === 'auto_timer' && snap.prompt;
-  const r = 64;
-  const c = 2 * Math.PI * r;
+  const stretch = b.stretch ?? 'reach';
+  const [now, setNow] = useState(Date.now());
+  const modal = useRef<HTMLDivElement>(null);
+  useModalFocus(modal);
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(id);
+  }, []);
+  const elapsedSeconds = (snap.clock.minute - b.startedAt) * 60 + (Math.max(0, now - snap.clock.sampledAt) / 1000) * snap.settings.speed;
+  const remaining = Math.max(0, Math.ceil(b.plannedMin * 60 - elapsedSeconds));
+  const progress = Math.min(1, Math.max(0, elapsedSeconds / (b.plannedMin * 60)));
+  const time = `${String(Math.floor(remaining / 60)).padStart(2, '0')}:${String(remaining % 60).padStart(2, '0')}`;
+  const line = STRETCHES.find((item) => item.id === stretch)?.line ?? '';
+  const circumference = 2 * Math.PI * 106;
   return (
     <div className="hi-overlay">
-      <div className="hi-card hi-break" role="dialog" aria-label="休憩中">
-        <div className="hi-head">
-          <span className="hi-title">休憩中</span>
-          <button className="hi-x" onClick={() => runner.askEndBreak()} aria-label="休憩を終える">
-            ×
-          </button>
-        </div>
-        {autoMode && <div className="hi-body">{AUTO_TIMER_COPY(b.plannedMin)}</div>}
+      <div ref={modal} className="hi-card hi-break" role="dialog" aria-modal="true" aria-label="休憩中" tabIndex={-1}
+        onKeyDown={(event) => {
+          trapFocus(event);
+          if (event.key === 'Escape') { event.stopPropagation(); snap.confirmEndBreak ? runner.cancelEndBreak() : runner.askEndBreak(); }
+        }}>
+        <header className="hi-head hi-break-head">
+          <div className="hi-heading"><Icon name="leaf" /><h2>休憩中</h2></div>
+          <button className="hi-icon-btn" onClick={() => runner.askEndBreak()} aria-label="休憩を終える"><Icon name="close" /></button>
+        </header>
         <div className="hi-timer">
-          <svg width="160" height="160" viewBox="0 0 160 160" aria-hidden>
-            <circle cx="80" cy="80" r={r} fill="none" stroke="var(--hi-track)" strokeWidth="8" />
-            <circle
-              cx="80"
-              cy="80"
-              r={r}
-              fill="none"
-              stroke="var(--hi-accent)"
-              strokeWidth="8"
-              strokeDasharray={`${c * (1 - progress)} ${c}`}
-              transform="rotate(-90 80 80)"
-              strokeLinecap="round"
-            />
+          <svg className="hi-timer-ring" width="232" height="232" viewBox="0 0 232 232" aria-hidden="true">
+            <circle cx="116" cy="116" r="106" fill="none" stroke="var(--hi-ring-track)" strokeWidth="10" />
+            <circle cx="116" cy="116" r="106" fill="none" stroke="var(--hi-ring)" strokeWidth="10" strokeDasharray={`${circumference * (1 - progress)} ${circumference}`} transform="rotate(-90 116 116)" strokeLinecap="round" />
           </svg>
-          <div className="hi-timer-inner">
-            <Pictogram kind={stretch} />
-            <div className="hi-timer-text">残り {remaining} 分</div>
-          </div>
+          <div className="hi-timer-inner"><Pictogram kind={stretch} /><span className="hi-timer-text" role="timer" aria-label={`休憩の残り時間 ${time}`}>{time}</span></div>
         </div>
-        <div className="hi-tabs">
-          {STRETCHES.map((s) => (
-            <button key={s.id} className={`hi-tab ${s.id === stretch ? 'hi-on' : ''}`} onClick={() => setStretch(s.id)}>
-              {s.name}
-            </button>
-          ))}
-        </div>
-        <div className="hi-body">{line}</div>
-        <div className="hi-muted">そのまま休んでもOK!無理のない範囲でね😊</div>
-        <input
-          className="hi-input"
-          placeholder="戻ったら何をする?(1 行・任意)"
-          value={memo}
-          maxLength={80}
-          onChange={(e) => {
-            setMemo(e.target.value);
-            runner.setMemo(e.target.value);
-          }}
-        />
-        {autoMode ? (
-          <div className="hi-actions">
-            <button className="hi-btn" onClick={() => runner.respondToPrompt('next_breakpoint')}>
-              次の区切りで
-            </button>
-            <button className="hi-btn hi-ghost" onClick={() => runner.respondToPrompt('decline')}>
-              今回は不要
-            </button>
-          </div>
-        ) : (
-          <div className="hi-actions">
-            <button className="hi-btn" onClick={() => runner.askEndBreak()}>
-              休憩を終える
-            </button>
-          </div>
-        )}
-        {snap.confirmEndBreak && (
-          <div className="hi-confirm">
-            <div>休憩を終える?</div>
-            <div className="hi-actions">
-              <button className="hi-btn hi-primary" onClick={() => { runner.setMemo(memo); runner.endBreakEarly(); }}>
-                終える
-              </button>
-              <button className="hi-btn" onClick={() => runner.cancelEndBreak()}>
-                続ける
-              </button>
-            </div>
-          </div>
-        )}
+        <div className="hi-stretch-name">{STRETCHES.find((item) => item.id === stretch)?.name}</div>
+        <p className="hi-stretch-line">{line}</p>
+        <p className="hi-muted hi-stretch-hint">そのまま休んでもOK。無理のない範囲で。</p>
+        <details className="hi-memo-disclosure">
+          <summary>復帰メモ<Icon name="chevron" /></summary>
+          <label className="hi-memo-field">戻ったらやること<input className="hi-input" placeholder="例：テスト結果を確認する" value={b.memo} maxLength={80} onChange={(event) => runner.setMemo(event.target.value)} /></label>
+        </details>
+        <button className="hi-btn hi-full hi-end-break" onClick={() => runner.askEndBreak()}>休憩を終える</button>
+        {snap.confirmEndBreak && <div className="hi-confirm" role="group" aria-label="休憩終了の確認"><p>休憩を終えますか？</p><div className="hi-actions"><button className="hi-btn hi-primary" onClick={() => runner.endBreakEarly()}>終える</button><button className="hi-btn" onClick={() => runner.cancelEndBreak()}>続ける</button></div></div>}
       </div>
     </div>
   );
 }
 
 function Welcome({ snap, runner }: { snap: UiSnapshot; runner: Runner }) {
-  const f = snap.finishedBreak!;
-  const line = endCopy({ top: f.top, plannedMin: f.plannedMin, highUf: snap.state.uf >= HIGH_UF, seed: snap.state.minute });
+  const finished = snap.finishedBreak!;
+  const line = endCopy({ top: finished.top, plannedMin: finished.plannedMin, highUf: snap.state.uf >= HIGH_UF });
   return (
-    <div className="hi-card hi-welcome" role="dialog" aria-label="おかえり">
-      {f.memo && (
-        <div className="hi-memo">
-          <div className="hi-muted">戻ったらやること</div>
-          <div className="hi-memo-text">📝 {f.memo}</div>
-        </div>
-      )}
-      <div className="hi-title">{line}</div>
-      <div className="hi-body">この休憩どうだった?👀</div>
-      <div className="hi-actions">
-        <button className="hi-btn" onClick={() => runner.sendFeedback('good')}>😆 よかった!</button>
-        <button className="hi-btn" onClick={() => runner.sendFeedback('ok')}>🙂 ふつう</button>
-        <button className="hi-btn" onClick={() => runner.sendFeedback('unneeded')}>😐 いらなかった</button>
-      </div>
-      <button className="hi-link" onClick={() => runner.dismissFinished()}>
-        閉じる
-      </button>
-    </div>
+    <section className="hi-card hi-welcome" aria-label="おかえり">
+      <div className="hi-head"><div className="hi-heading"><Icon name="leaf" /><h2>おかえりなさい</h2></div><button className="hi-icon-btn" onClick={() => runner.dismissFinished()} aria-label="復帰メッセージを閉じる"><Icon name="close" /></button></div>
+      {finished.memo && <div className="hi-memo"><span className="hi-muted">戻ったらやること</span><p>{finished.memo}</p></div>}
+      <p className="hi-welcome-line">{line}</p><p className="hi-muted">この休憩はどうでしたか？</p>
+      <div className="hi-actions"><button className="hi-btn" onClick={() => runner.sendFeedback('good')}>よかった</button><button className="hi-btn" onClick={() => runner.sendFeedback('ok')}>ふつう</button><button className="hi-btn" onClick={() => runner.sendFeedback('unneeded')}>不要だった</button></div>
+    </section>
   );
 }

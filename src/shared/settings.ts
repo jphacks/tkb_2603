@@ -11,7 +11,8 @@ export const CLASSIFIER_MODELS = [
 export interface Settings {
   /** 計測するか(止めると何も記録しない) */
   enabled: boolean;
-  mode: NotifyMode;
+  /** 旧設定との互換のため保持。休憩はユーザーが開始する。 */
+  mode: 'notify';
   /** 通知のしきい値 */
   threshold: number;
   /** 休憩の長さの調整(0.5 短め / 1 標準 / 1.5 長め) */
@@ -51,11 +52,11 @@ const KEYS = {
 
 export async function loadSettings(): Promise<Settings> {
   const got = await browser.storage.local.get(KEYS.settings);
-  return { ...DEFAULT_SETTINGS, ...(got[KEYS.settings] as Partial<Settings> | undefined) };
+  return { ...DEFAULT_SETTINGS, ...(got[KEYS.settings] as Partial<Settings> | undefined), mode: 'notify' };
 }
 
 export async function saveSettings(patch: Partial<Settings>): Promise<Settings> {
-  const next = { ...(await loadSettings()), ...patch };
+  const next: Settings = { ...(await loadSettings()), ...patch, mode: 'notify' };
   await browser.storage.local.set({ [KEYS.settings]: next });
   return next;
 }
@@ -64,7 +65,7 @@ export function onSettingsChanged(cb: (s: Settings) => void): () => void {
   const listener = (changes: Record<string, { newValue?: unknown }>, area: string) => {
     const change = changes[KEYS.settings];
     if (area === 'local' && change) {
-      cb({ ...DEFAULT_SETTINGS, ...(change.newValue as Partial<Settings>) });
+      cb({ ...DEFAULT_SETTINGS, ...(change.newValue as Partial<Settings>), mode: 'notify' });
     }
   };
   browser.storage.onChanged.addListener(listener);

@@ -6,6 +6,7 @@ import {
   type EngineState,
   type ModelParams,
   type Observation,
+  type StretchId,
   zeroElements,
 } from './types';
 
@@ -130,6 +131,7 @@ export function tick(state: EngineState, p: ModelParams): TickResult {
     s.uf = 0;
     s.contribSinceBreak = zeroElements();
     s.lastWorkAt = null;
+    s.prompt = { notBefore: 0, declineStreak: 0, waitingForUser: false };
   }
 
   s.history.push({ t: s.minute, load: load(s) });
@@ -143,9 +145,10 @@ export function breakMinutes(loadValue: number, scale = 1): number {
   return Math.max(1, Math.min(15, Math.round(base * scale)));
 }
 
-export function startBreak(state: EngineState, plannedMin: number, memo: string): EngineState {
+export function startBreak(state: EngineState, plannedMin: number, memo: string, stretch: StretchId = 'reach'): EngineState {
   const s = structuredClone(state);
-  s.breakState = { startedAt: s.minute, plannedMin, memo };
+  s.breakState = { startedAt: s.minute, plannedMin, memo, stretch };
+  s.prompt.waitingForUser = false;
   return s;
 }
 
@@ -155,6 +158,7 @@ export function endBreak(state: EngineState, markActive = true): EngineState {
   s.breakState = null;
   s.contribSinceBreak = zeroElements();
   s.prompt.declineStreak = 0;
+  s.prompt.waitingForUser = false;
   if (markActive) s.lastActivityAt = s.minute;
   return s;
 }

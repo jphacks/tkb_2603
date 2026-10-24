@@ -67,14 +67,7 @@ function Options() {
 
       <section>
         <h2>休憩の出し方</h2>
-        <label className="row">
-          <input type="radio" checked={s.mode === 'notify'} onChange={() => update({ mode: 'notify' })} />
-          通知: 器が一定量に届いたら、区切りで「○分休もう」と出す
-        </label>
-        <label className="row">
-          <input type="radio" checked={s.mode === 'auto_timer'} onChange={() => update({ mode: 'auto_timer' })} />
-          自動タイマー: 届いた時点で通知して、休憩タイマーを起動する
-        </label>
+        <p className="muted">器が一定量に届いたら、作業の区切りで通知します。「今休む」か「区切りがついたら休む」を選べます。休憩は開始ボタンを押すと始まります。</p>
         <label className="field">
           通知する器の量: {s.threshold}%
           <input type="range" min={50} max={95} step={5} value={s.threshold} onChange={(e) => update({ threshold: Number(e.target.value) })} />

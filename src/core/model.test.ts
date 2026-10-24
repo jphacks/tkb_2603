@@ -189,21 +189,34 @@ describe('区切りの判定', () => {
     expect(isBreakpoint({ ...s, readBacklogMin: 3 }, quietCtx)).toBe(false);
   });
 
-  it('通知モードは区切りまで待ち、自動タイマーは届いた時点で出す', () => {
+  it('通知は作業の区切りを待ち、ユーザーが開始する', () => {
     const s = { ...initialState(), rf: 85 };
     const busy = { ...quietCtx, typing: true };
-    expect(shouldPrompt(s, P, 'notify', busy, false)).toBe(false);
-    expect(shouldPrompt(s, P, 'auto_timer', busy, false)).toBe(true);
-    expect(shouldPrompt(s, P, 'auto_timer', busy, true)).toBe(false);
-    expect(shouldPrompt(s, P, 'notify', quietCtx, false)).toBe(true);
+    expect(shouldPrompt(s, P, busy)).toBe(false);
+    expect(shouldPrompt(s, P, quietCtx)).toBe(true);
+    expect(s.breakState).toBeNull();
   });
 
-  it('「次の区切りで」は最短 5 分あける', () => {
+  it('「区切りがついたら休む」は開始操作まで通知を重ねず、計測を続ける', () => {
     let s = { ...initialState(), rf: 85 };
     s = applyPromptAction(s, 'next_breakpoint');
-    expect(shouldPrompt(s, P, 'notify', quietCtx, true)).toBe(false);
-    s = { ...s, minute: s.minute + 5 };
-    expect(shouldPrompt(s, P, 'notify', quietCtx, true)).toBe(true);
+    expect(s.prompt.waitingForUser).toBe(true);
+    expect(shouldPrompt(s, P, quietCtx)).toBe(false);
+    s = work(s, 20, { readMinPerMin: 2, decisionsPerMin: 2, verifPerMin: 2, switchEvery: 1 });
+    expect(load(s)).toBe(100);
+    expect(s.breakState).toBeNull();
+    expect(shouldPrompt(s, P, quietCtx)).toBe(false);
+    s = startBreak(s, breakMinutes(load(s)), '', 'shoulder');
+    expect(s.prompt.waitingForUser).toBe(false);
+    expect(s.breakState?.plannedMin).toBe(15);
+    expect(s.breakState?.stretch).toBe('shoulder');
+  });
+
+  it('3時間の区切りでは開始待ちも解除する', () => {
+    let s = applyPromptAction(work(initialState(), 10), 'next_breakpoint');
+    for (let i = 0; i < 200; i++) s = tick(s, P).state;
+    expect(load(s)).toBe(0);
+    expect(s.prompt.waitingForUser).toBe(false);
   });
 });
 
