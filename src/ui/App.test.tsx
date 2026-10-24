@@ -90,6 +90,31 @@ describe('画像に合わせたUIの操作', () => {
     expect(container.querySelector('.hi-ready')?.getAttribute('title')).toBe('15分の休憩を始める');
   });
 
+  it('入力欄全体の上に配置し、画面変更と会話切替で入力欄が置き換わっても追従する', async () => {
+    const form = document.createElement('form');
+    form.innerHTML = '<div id="prompt-textarea" contenteditable="true"></div>';
+    document.body.append(form);
+    vi.spyOn(form, 'getBoundingClientRect').mockReturnValue(new DOMRect(20, 500, 600, 100));
+    const refresh = async () => {
+      await act(async () => {
+        window.dispatchEvent(new Event('resize'));
+        await vi.advanceTimersByTimeAsync(50);
+      });
+    };
+    const bottom = () => parseFloat(container.querySelector<HTMLElement>('.hi-dock')!.style.bottom);
+    await refresh();
+    expect(bottom()).toBe(window.innerHeight - 500 + 16);
+    const next = form.cloneNode(true) as HTMLFormElement;
+    vi.spyOn(next, 'getBoundingClientRect').mockReturnValue(new DOMRect(20, 360, 600, 240));
+    form.replaceWith(next);
+    await refresh();
+    expect(bottom()).toBe(window.innerHeight - 360 + 16);
+    next.remove();
+    await refresh();
+    expect(bottom()).toBe(144);
+    vi.restoreAllMocks();
+  });
+
   it('秒表示は操作による再描画で戻らず、倍速と新しい時計に追従する', async () => {
     snap = { ...snap, settings: { ...snap.settings, speed: 10 }, clock: { minute: 2.5, sampledAt: Date.now() }, state: { ...snap.state, minute: 2, breakState: { startedAt: 0, plannedMin: 10, memo: '' } } };
     await publish();
@@ -110,6 +135,25 @@ describe('画像に合わせたUIの操作', () => {
     expect(runner.cancelEndBreak).toHaveBeenCalledOnce();
     await click('終える');
     expect(runner.endBreakEarly).toHaveBeenCalledOnce();
+  });
+
+  it.each([[118, 2], [0, 120]])('120%%を数値で表示し、器とリングは100%%に収める（RF=%s UF=%s）', async (rf, uf) => {
+    snap = { ...snap, load: 120, state: { ...snap.state, rf, uf, history: [{ t: 0, load: 120 }] } };
+    await publish();
+    expect(container.querySelector('.hi-pill-percent')?.textContent).toBe('120%');
+    const ring = container.querySelector('.hi-load-ring circle:last-child')!;
+    expect(ring.getAttribute('stroke-dasharray')?.split(' ').map(Number)).toEqual([2 * Math.PI * 8, 2 * Math.PI * 8]);
+    await click('作業モニターを開く');
+    expect(container.querySelector('.hi-load-heading')?.textContent).toContain('120%');
+    expect(container.querySelector('.hi-load-overflow')?.textContent).toContain('100%を超えています！ 現在120%');
+    const meter = container.querySelector('.hi-load-bar')!;
+    expect(meter.getAttribute('aria-valuenow')).toBe('100');
+    expect(meter.getAttribute('aria-valuetext')).toContain('120%');
+    const widths = ['.hi-load-uf', '.hi-load-rf'].map((selector) => parseFloat(container.querySelector<HTMLElement>(selector)!.style.width));
+    expect(widths.every((width) => width >= 0)).toBe(true);
+    expect(widths[0]! + widths[1]!).toBe(100);
+    expect(container.querySelector('.hi-spark')?.getAttribute('aria-label')).toContain('150%');
+    expect(Number(container.querySelector('.hi-spark-dot')?.getAttribute('cy'))).toBeGreaterThan(0);
   });
 
   it('休憩では1種類の運動を案内し、再描画で変えず、復帰メモと評価を扱える', async () => {

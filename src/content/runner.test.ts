@@ -62,9 +62,10 @@ describe('休憩の開始をユーザーに任せる', () => {
     expect(snap.state.breakState).toBeNull();
     expect(snap.load).toBeGreaterThan(85);
 
-    // ほかのタブの計測で100%になった場合も、開始操作までは休憩しない。
+    // ほかのタブの計測で100%を超えた場合も、実値を保ち、開始操作までは休憩しない。
     const receive = vi.mocked(onEngineChanged).mock.calls.at(-1)![0];
-    receive({ state: { ...snap.state, rf: 98, uf: 2 }, realSavedAt: Date.now(), lastTickReal: Date.now(), writer: 'another-tab' });
+    receive({ state: { ...snap.state, rf: 118, uf: 2 }, realSavedAt: Date.now(), lastTickReal: Date.now(), writer: 'another-tab' });
+    expect(snap.load).toBe(120);
     expect(snap.state.breakState).toBeNull();
     const random = vi.spyOn(Math, 'random').mockReturnValue(0.5);
     restored.startDeferredBreak();
@@ -72,6 +73,7 @@ describe('休憩の開始をユーザーに任せる', () => {
     expect(snap.state.breakState?.stretch).toBe('shoulder');
     expect(snap.state.prompt.waitingForUser).toBe(false);
     expect(vi.mocked(saveEngine).mock.calls.at(-1)![0].breakState?.stretch).toBe('shoulder');
+    expect(vi.mocked(saveEngine).mock.calls.at(-1)![0].rf).toBe(118);
     random.mockRestore();
     const starts = vi.mocked(appendLog).mock.calls.filter(([entry]) => entry.type === 'break_start').length;
     restored.startDeferredBreak();

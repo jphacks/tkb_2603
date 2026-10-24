@@ -11,7 +11,7 @@ import {
 } from './types';
 
 export function load(state: EngineState): number {
-  return Math.min(100, state.rf + state.uf);
+  return state.rf + state.uf;
 }
 
 /** 読む残り時間(分)を回答の量から求める。日本語 653 字/分、英語 238 語/分(DR04) */
@@ -115,9 +115,9 @@ export function tick(state: EngineState, p: ModelParams): TickResult {
     values = elementValues(s, p);
     const e = intensity(values);
     const gain = p.g * e;
-    // RF の上限は 100 − UF(断り続けても膨らまない)
-    s.uf = Math.min(100, s.uf + p.rho * gain);
-    s.rf = Math.min(100 - s.uf, s.rf + (1 - p.rho) * gain);
+    // 100%を超えても蓄積を続ける。バーの描画だけを100%で止める。
+    s.uf += p.rho * gain;
+    s.rf += (1 - p.rho) * gain;
     for (const k of Object.keys(values) as (keyof ElementValues)[]) {
       added[k] = (p.g * values[k]) / 5;
       s.contribSinceBreak[k] += added[k];

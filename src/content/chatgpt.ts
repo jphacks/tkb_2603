@@ -63,6 +63,12 @@ function firstMatch(group: SelectorGroup, root: ParentNode = document): { el: El
   return { el: null, sel: null };
 }
 
+/** 入力欄全体の上端を、常駐ボタンの配置に使う。本文には触れない。 */
+export function findComposerContainer(): HTMLElement | null {
+  const composer = firstMatch('composer').el as HTMLElement | null;
+  return composer?.closest('form') ?? composer;
+}
+
 function allMatch(group: SelectorGroup): Element[] {
   for (const sel of SELECTORS[group]) {
     const els = Array.from(document.querySelectorAll(sel));

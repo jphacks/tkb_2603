@@ -6,7 +6,8 @@ import type { Runner, UiSnapshot } from '../content/runner';
 import { endCopy, promptCopy, SNOOZE_COPY, STRETCHES } from './copy';
 import { Pictogram } from './Pictogram';
 import { Icon } from './Icon';
-import { loadLevel, loadPercent } from './presentation';
+import { loadFillPercent, loadLevel, loadPercent } from './presentation';
+import { useDockPosition } from './useDockPosition';
 
 const HIGH_UF = 30;
 
@@ -53,19 +54,24 @@ export function App({ runner }: { runner: Runner }) {
       {panelOpen && <Detail snap={snap} runner={runner} onClose={closePanel} />}
       {toast && <div className="hi-toast" role="status">{toast}</div>}
       {!onBreak && !panelOpen && (
-        <div className="hi-dock">
-          {snap.state.prompt.waitingForUser && <button className="hi-ready" onClick={() => runner.startDeferredBreak()}
-            title={`${breakMinutes(snap.load, snap.settings.breakScale)}分の休憩を始める`}
-            aria-label={`区切りがついた。${breakMinutes(snap.load, snap.settings.breakScale)}分の休憩を始める`}>
-            <Icon name="leaf" /><span>区切りがついた</span>
-          </button>}
-          <button ref={pill} className="hi-pill" onClick={() => setOpen(true)} aria-label="作業モニターを開く" aria-expanded={false}>
-            <LoadRing value={snap.load} /><span>計測中</span><strong className="hi-pill-percent">{loadPercent(snap.load)}%</strong><Icon name="chevron" />
-          </button>
-        </div>
+        <Dock snap={snap} runner={runner} pill={pill} onOpen={() => setOpen(true)} />
       )}
     </div>
   );
+}
+
+function Dock({ snap, runner, pill, onOpen }: { snap: UiSnapshot; runner: Runner; pill: RefObject<HTMLButtonElement | null>; onOpen: () => void }) {
+  const { ref, bottom } = useDockPosition();
+  return <div ref={ref} className="hi-dock" style={{ bottom }}>
+    {snap.state.prompt.waitingForUser && <button className="hi-ready" onClick={() => runner.startDeferredBreak()}
+      title={`${breakMinutes(snap.load, snap.settings.breakScale)}分の休憩を始める`}
+      aria-label={`区切りがついた。${breakMinutes(snap.load, snap.settings.breakScale)}分の休憩を始める`}>
+      <Icon name="leaf" /><span>区切りがついた</span>
+    </button>}
+    <button ref={pill} className="hi-pill" onClick={onOpen} aria-label="作業モニターを開く" aria-expanded={false}>
+      <LoadRing value={snap.load} /><span>計測中</span><strong className="hi-pill-percent">{loadPercent(snap.load)}%</strong><Icon name="chevron" />
+    </button>
+  </div>;
 }
 
 /** ChatGPTの明示的なテーマを優先。指定がなければOS設定に従う。 */
@@ -97,7 +103,7 @@ function LoadRing({ value }: { value: number }) {
   const circumference = 2 * Math.PI * 8;
   return <svg className="hi-load-ring" width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
     <circle cx="11" cy="11" r="8" fill="none" stroke="var(--hi-track)" strokeWidth="3" />
-    <circle cx="11" cy="11" r="8" fill="none" stroke="var(--hi-load-color)" strokeWidth="3" strokeDasharray={`${circumference * loadPercent(value) / 100} ${circumference}`} transform="rotate(-90 11 11)" strokeLinecap="round" />
+    <circle cx="11" cy="11" r="8" fill="none" stroke="var(--hi-load-color)" strokeWidth="3" strokeDasharray={`${circumference * loadFillPercent(value) / 100} ${circumference}`} transform="rotate(-90 11 11)" strokeLinecap="round" />
   </svg>;
 }
 
@@ -120,6 +126,9 @@ function PromptCard({ snap, onAction }: { snap: UiSnapshot; onAction: (action: '
 
 function Detail({ snap, runner, onClose }: { snap: UiSnapshot; runner: Runner; onClose: () => void }) {
   const shares = contributionShares(snap.state);
+  const ufFill = Math.min(100, Math.max(0, snap.state.uf));
+  const rfFill = Math.min(100 - ufFill, Math.max(0, snap.state.rf));
+  const percent = loadPercent(snap.load);
   const close = useRef<HTMLButtonElement>(null);
   useEffect(() => { close.current?.focus({ preventScroll: true }); }, []);
   return (
@@ -138,13 +147,14 @@ function Detail({ snap, runner, onClose }: { snap: UiSnapshot; runner: Runner; o
         <h2 className="hi-detail-title">作業の負担の目安</h2>
         <section className="hi-load-summary" aria-label="全体の器">
           <div className="hi-load-heading"><span>全体の器</span><strong>{loadPercent(snap.load)}<small>%</small></strong></div>
-          <div className="hi-load-bar" role="meter" aria-label="全体の器" aria-valuenow={loadPercent(snap.load)} aria-valuemin={0} aria-valuemax={100}>
-            <div className="hi-load-uf" style={{ width: `${snap.state.uf}%` }} />
-            <div className="hi-load-rf" style={{ width: `${Math.min(100 - snap.state.uf, snap.state.rf)}%` }} />
+          <div className="hi-load-bar" role="meter" aria-label="全体の器" aria-valuenow={loadFillPercent(snap.load)} aria-valuetext={`${percent}%${percent > 100 ? '、100%を超えています' : ''}`} aria-valuemin={0} aria-valuemax={100}>
+            <div className="hi-load-uf" style={{ width: `${ufFill}%` }} />
+            <div className="hi-load-rf" style={{ width: `${rfFill}%` }} />
             <span className="hi-load-threshold" style={{ left: `${snap.settings.threshold}%` }} />
           </div>
           <div className="hi-load-caption"><span>うち今日残る分 {loadPercent(snap.state.uf)}%</span><span>休憩の目安 {snap.settings.threshold}%</span></div>
-          {loadPercent(snap.load) >= 90 && <p className="hi-load-message">{loadPercent(snap.load) >= 100 ? '器がいっぱいです。区切りで休憩しましょう。' : '器がたまってきました。休憩を意識しましょう。'}</p>}
+          {percent > 100 ? <p className="hi-load-message hi-load-overflow"><strong>100%を超えています！ 現在{percent}%</strong><span>区切りで休憩しましょう。</span></p>
+            : percent >= 90 && <p className="hi-load-message">{percent >= 100 ? '器がいっぱいです。区切りで休憩しましょう。' : '器がたまってきました。休憩を意識しましょう。'}</p>}
         </section>
         <h3 className="hi-breakdown-title">休憩してから、何がためたか</h3>
         <p className="hi-breakdown-hint">各項目は、負担をためた要因の割合です。</p>
@@ -197,13 +207,16 @@ function Diagnostics({ snap }: { snap: UiSnapshot }) {
 }
 
 function Sparkline({ history, minute }: { history: { t: number; load: number }[]; minute: number }) {
-  const points = history.map((point) => `${16 + ((point.t - (minute - 30)) / 30) * 304},${120 - (point.load / 100) * 104}`).join(' ');
+  const max = Math.max(100, Math.ceil(Math.max(0, ...history.map((point) => point.load)) / 50) * 50);
+  const x = (t: number) => 44 + ((t - (minute - 30)) / 30) * 276;
+  const y = (value: number) => 120 - (value / max) * 104;
+  const points = history.map((point) => `${x(point.t)},${y(point.load)}`).join(' ');
   return (
     <div className="hi-chart">
-      <svg viewBox="0 0 336 136" width="336" height="136" className="hi-spark" role="img" aria-label="直近30分の負担の推移（0から100）">
-        {[24, 56, 88, 120].map((y) => <line key={y} x1="12" x2="324" y1={y} y2={y} className="hi-spark-grid" />)}
+      <svg viewBox="0 0 336 136" width="336" height="136" className="hi-spark" role="img" aria-label={`直近30分の負担の推移（0から${max}%）`}>
+        {[0, max / 2, max].map((value) => <g key={value}><line x1="42" x2="324" y1={y(value)} y2={y(value)} className="hi-spark-grid" /><text x="36" y={y(value) + 3} textAnchor="end" className="hi-spark-label">{value}%</text></g>)}
         {history.length > 1 && <polyline points={points} className="hi-spark-line" />}
-        {history.length === 1 && <circle cx={16 + ((history[0]!.t - (minute - 30)) / 30) * 304} cy={120 - (history[0]!.load / 100) * 104} r="3" className="hi-spark-dot" />}
+        {history.length === 1 && <circle cx={x(history[0]!.t)} cy={y(history[0]!.load)} r="3" className="hi-spark-dot" />}
       </svg>
       {!history.length && <span className="hi-chart-empty">作業の記録がここに表示されます</span>}
     </div>

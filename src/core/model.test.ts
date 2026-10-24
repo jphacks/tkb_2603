@@ -50,12 +50,14 @@ const quietCtx: GateContext = {
 };
 
 describe('器の計算', () => {
-  it('T1: RF ≥ 0、器は 0〜100 におさまる', () => {
+  it('T1: 100%を超えても作業量を保持し、休憩でRFは0まで回復する', () => {
     let s = work(initialState(), 200, { decisionsPerMin: 3, verifPerMin: 3, switchEvery: 1, readMinPerMin: 2 });
     expect(s.rf).toBeGreaterThanOrEqual(0);
-    expect(load(s)).toBeLessThanOrEqual(100);
+    expect(load(s)).toBeGreaterThan(100);
+    expect(Number.isFinite(load(s))).toBe(true);
+    const recoveryMinutes = Math.ceil(s.rf / P.r);
     s = startBreak(s, 15, '');
-    for (let i = 0; i < 60; i++) s = tick(s, P).state;
+    for (let i = 0; i < recoveryMinutes; i++) s = tick(s, P).state;
     expect(s.rf).toBe(0);
   });
 
@@ -103,11 +105,12 @@ describe('器の計算', () => {
     expect(s.rf).toBe(0);
     expect(breakMinutes(80)).toBe(10);
     expect(breakMinutes(100)).toBe(15);
+    expect(breakMinutes(120)).toBe(15);
     expect(breakMinutes(100, 2)).toBe(15);
     expect(breakMinutes(80, 0.01)).toBe(1);
   });
 
-  it('T7: 断り続けても通知の間隔が縮まない・RF は 100−UF を超えない', () => {
+  it('T7: 断り続けても通知間隔が縮まず、超過分も休憩の回復計算に含める', () => {
     let s = work(initialState(), 60, { readMinPerMin: 1, decisionsPerMin: 2, verifPerMin: 2 });
     const gaps: number[] = [];
     for (let n = 0; n < 4; n++) {
@@ -117,15 +120,15 @@ describe('器の計算', () => {
       s = work(s, 5, { readMinPerMin: 1, decisionsPerMin: 2 });
     }
     for (let i = 1; i < gaps.length; i++) expect(gaps[i]!).toBeGreaterThanOrEqual(gaps[i - 1]!);
-    expect(s.rf).toBeLessThanOrEqual(100 - s.uf + 1e-9);
-    // 15 分休めば必ず 80 を下回る
+    expect(load(s)).toBeGreaterThan(100);
+    const before = load(s);
     s = startBreak(s, 15, '');
     for (let i = 0; i < 15; i++) s = tick(s, P).state;
-    expect(load(s)).toBeLessThan(P.threshold);
+    expect(load(s)).toBeCloseTo(before - 15 * P.r);
   });
 
-  it('T8: 要素ごとの寄与の合計 = 器の増え方(上限にかからない範囲)', () => {
-    let s = initialState();
+  it.each([0, 120])('T8: %s%%からも要素ごとの寄与の合計 = 器の増え方', (rf) => {
+    const s = { ...initialState(), rf };
     const r = tick(observe(observe(s, { kind: 'activity', t: 0 }, P), { kind: 'decision', t: 0, count: 1 }, P), P);
     const sum = ELEMENT_KEYS.reduce((a, k) => a + r.added[k], 0);
     expect(sum).toBeCloseTo(r.state.rf + r.state.uf - (s.rf + s.uf), 6);
@@ -203,7 +206,7 @@ describe('区切りの判定', () => {
     expect(s.prompt.waitingForUser).toBe(true);
     expect(shouldPrompt(s, P, quietCtx)).toBe(false);
     s = work(s, 20, { readMinPerMin: 2, decisionsPerMin: 2, verifPerMin: 2, switchEvery: 1 });
-    expect(load(s)).toBe(100);
+    expect(load(s)).toBeGreaterThan(100);
     expect(s.breakState).toBeNull();
     expect(shouldPrompt(s, P, quietCtx)).toBe(false);
     s = startBreak(s, breakMinutes(load(s)), '', 'shoulder');

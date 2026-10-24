@@ -80,14 +80,15 @@
 .hi-text-btn { color: var(--hi-accent); background: transparent; }
 .hi-full { width: 100%; }
 .hi-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
-.hi-dock { position: fixed; right: 28px; bottom: 20px; z-index: 2147483000; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; max-width: calc(100% - 32px); }
-.hi-pill { --hi-load-color: var(--hi-accent); display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px 0 10px; border: 1px solid var(--hi-border); border-radius: 24px; color: var(--hi-muted); background: var(--hi-bg); box-shadow: var(--hi-shadow); font-size: 12px; }
+.hi-dock { position: fixed; right: 28px; bottom: 144px; z-index: 2147483000; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; max-width: calc(100% - 32px); }
+.hi-pill { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px 0 10px; border: 1px solid var(--hi-border); border-radius: 24px; color: var(--hi-muted); background: var(--hi-bg); box-shadow: var(--hi-shadow); font-size: 12px; }
 .hi-pill-percent { color: var(--hi-load-color); font-size: 14px; font-weight: 650; font-variant-numeric: tabular-nums; }
 .hi-load-ring { flex-shrink: 0; }
 .hi-ready { display: flex; align-items: center; justify-content: center; gap: 10px; min-width: 200px; min-height: 48px; max-width: 100%; padding: 12px 20px; border: 1px solid transparent; border-radius: 16px; color: var(--hi-accent-fg); background: var(--hi-accent); box-shadow: var(--hi-shadow); font-size: 13px; font-weight: 650; }
 .hi-ready > .hi-icon { width: 18px; height: 18px; }
-.hi-root[data-load-level='warning'] .hi-ready { color: #463500; background: #ffdf38; border-color: #e4bd16; }
-.hi-root[data-load-level='critical'] .hi-ready { color: #fff; background: #cd3d3d; border-color: #bd3030; box-shadow: 0 4px 16px rgba(205, 61, 61, .25); }
+.hi-root[data-load-level='warning'] :is(.hi-ready, .hi-pill) { color: #463500; background: #ffdf38; border-color: #e4bd16; }
+.hi-root[data-load-level='critical'] :is(.hi-ready, .hi-pill) { color: #fff; background: #cd3d3d; border-color: #bd3030; box-shadow: 0 4px 16px rgba(205, 61, 61, .25); }
+.hi-root:is([data-load-level='warning'], [data-load-level='critical']) .hi-pill { --hi-load-color: currentColor; --hi-track: rgba(0, 0, 0, .15); }
 .hi-root[data-theme='dark'] .hi-ready:hover { filter: brightness(.96); }
 .hi-pill .hi-icon { width: 17px; height: 17px; }
 .hi-pill .hi-icon-chevron { width: 12px; height: 12px; }
@@ -116,6 +117,9 @@
 .hi-load-threshold { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--hi-prompt-icon); }
 .hi-load-caption { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px; margin-top: 10px; color: var(--hi-muted); font-size: 10px; }
 .hi-load-message { margin-top: 10px !important; color: var(--hi-load-color); font-size: 11px; }
+.hi-load-overflow { display: grid; gap: 4px; }
+.hi-load-overflow strong { font-size: 13px; }
+.hi-root[data-load-level='critical'] .hi-load-uf { background: var(--hi-load-color); opacity: .7; }
 .hi-breakdown-title { margin-top: 28px !important; font-size: 13px; font-weight: 600; }
 .hi-breakdown-hint { margin-top: 6px !important; color: var(--hi-muted); font-size: 11px; }
 .hi-meters { display: grid; gap: 18px; margin-top: 20px; }
@@ -134,6 +138,7 @@
 .hi-chart { position: relative; overflow: hidden; border-radius: 12px; background: var(--hi-soft); }
 .hi-spark { display: block; width: 100%; height: auto; }
 .hi-spark-grid { stroke: var(--hi-border); stroke-width: 1; }
+.hi-spark-label { fill: var(--hi-muted); font-size: 9px; }
 .hi-spark-line { fill: none; stroke: var(--hi-accent); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
 .hi-spark-dot { fill: var(--hi-accent); }
 .hi-chart-labels { display: flex; justify-content: space-between; margin-top: 12px; color: var(--hi-muted); font-size: 11px; }
@@ -186,7 +191,7 @@
 @keyframes hi-sway { 0%, 100% { transform: rotate(-9deg); } 50% { transform: rotate(9deg); } }
 @media (max-width: 600px) {
   .hi-detail { padding: 20px; }
-  .hi-dock { right: 16px; bottom: 16px; }
+  .hi-dock { right: 16px; }
   .hi-prompt, .hi-welcome { right: 16px; bottom: 120px; }
   .hi-prompt { top: 72px; bottom: auto; max-height: calc(100dvh - 96px); }
   .hi-break { padding: 22px; }
