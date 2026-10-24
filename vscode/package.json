@@ -3,6 +3,7 @@
   "displayName": "ひといき(VS Code 試作)",
   "description": "VS Code での作業の中身から負担の目安を計算して、区切りで休憩を提案する(Chrome 拡張と同じ計算)",
   "version": "0.0.0",
+  "publisher": "hitoiki",
   "private": true,
   "license": "MIT",
   "engines": {
@@ -45,7 +46,8 @@
   "scripts": {
     "build": "esbuild src/extension.ts --bundle --platform=node --format=cjs --target=node20 --external:vscode --outfile=dist/extension.js --sourcemap",
     "compile": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "e2e": "npm run build && node test/e2e/run.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",
