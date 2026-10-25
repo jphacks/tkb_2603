@@ -15,15 +15,15 @@ function Arm({ right = false }: { right?: boolean }) {
   );
 }
 
-// 手を肩に添えたまま、肘の位置を楕円上で動かす。右側は左右反転。
+// 肩→肘→手首→肩の3辺をつなぐ。手首も肘に追従し、手のひらは肩に接する。
+// 同じパスの頂点を共有することで、動作中も3辺の継ぎ目を離さない。
 function ShoulderArm({ right = false }: { right?: boolean }) {
   return (
-    <g transform={right ? 'translate(64 66) scale(-1 1)' : 'translate(36 66)'}>
+    <g transform={right ? 'translate(54 68) scale(-1 1)' : 'translate(46 68)'}>
       <g className="hi-picto-shoulder-guide" strokeWidth="1.5" opacity=".4">
         <path d="M-20 22C-39 22-47-5-34-21m-1 7 1-7-7 2" />
       </g>
-      <path className="hi-picto-shoulder-arm" d="M0 0L-22 11L4-11" strokeWidth="8" />
-      <circle className="hi-picto-hand" cx="4" cy="-11" r="4.5" fill="currentColor" stroke="none" />
+      <path className="hi-picto-shoulder-arm" d="M0 0L-26 11L-10.17-6.37Z" strokeWidth="6" />
     </g>
   );
 }
@@ -39,8 +39,9 @@ export function Pictogram({ kind }: { kind: StretchId }) {
           <g className="hi-picto-body">
             <path d="M50 53v42" />
             <g className="hi-picto-shoulders">
-              <path d={kind === 'shoulder' ? 'M36 66h28' : 'M38 62h24'} />
-              {kind === 'shoulder' ? <><ShoulderArm /><ShoulderArm right /></> : <><Arm /><Arm right /></>}
+              {kind === 'shoulder'
+                ? <><ShoulderArm /><ShoulderArm right /></>
+                : <><path d="M38 62h24" /><Arm /><Arm right /></>}
             </g>
             <circle cx="50" cy="35" r="18" fill="currentColor" stroke="none" />
             <g className="hi-picto-face" stroke="var(--hi-bg)" strokeWidth="2" fill="none"><path d="M39 32q3-4 6 0m10 0q3-4 6 0M44 42q6 7 12 0" /></g>
