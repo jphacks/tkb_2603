@@ -53,7 +53,6 @@ AI でコードを書くのは速くなりました。でも人の仕事は消�
 - **開発の現場に広げる**: VS Code では同じ計算が動きました。次は Claude Code・Codex の hooks です。承認待ちやテストの失敗まで取れるので、出来事の形を合わせれば同じ計算につなげられます
 - **1 人に 1 つの器にする**: 今は Chrome と VS Code で器が別々です。頭は 1 つなので、まとめてためるのが次です
 - **本人に合わせる**: 「役立った?」の答えや「あとで」を押した回数から、たまる速さを本人に合わせます
-- **キーなし版を配布する**: 共有中継による分類と初回同意を実装し、公開APIでの分類を確認しました。実際のAIチャット上での確認を終えてから配布します
 
 ### 注力したこと（こだわり等）
 * **根拠のある所と、仮置きの所を分けた**: 2 層の器(すぐ回復する負担と、その日は残る負担)は疲労の研究(Müller et al., Nature Communications 2021。体の努力の実験で、頭の作業で確かめられたものではない)の形を参考にしました。読む速さは日本語 653 字/分(小林・川嶋 2018)、英語 238 語/分(Brysbaert 2019)です。休憩の長さは、厚生労働省「情報機器作業における労働衛生管理のためのガイドライン」の「連続作業は 1 時間以内、10〜15 分の作業休止」に合わせました。要素ごとの重みには研究の根拠がないので、等重みの仮置きにして、そうはっきり書いています
@@ -85,6 +84,7 @@ AI でコードを書くのは速くなりました。でも人の仕事は消�
 - **記録の集計と、30 分タイマーとの比べ**(PR #3): [`scripts/analyze-log.ts`](scripts/analyze-log.ts)
 - **VS Code 拡張**(PR #5): 同じ計算をエディタの出来事で動かし、提案・休憩・おかえりまで Chrome と同じ流れにした。[`vscode/src/tracker.ts`](vscode/src/tracker.ts)、[`vscode/src/extension.ts`](vscode/src/extension.ts)。動かし方は [`vscode/DEVELOPMENT.md`](vscode/DEVELOPMENT.md)
 - **本番とデモを分けた**(PR #8): 倍速・たまる速さ・診断は本番では隠し([`src/shared/flags.ts`](src/shared/flags.ts))、パネルの詳細に「30 分ごとのタイマーだったら」の今日の比べを 1 行出す([`src/shared/timerCompare.ts`](src/shared/timerCompare.ts))。デモ用は [jphacks/tkb_2603-demo](https://github.com/jphacks/tkb_2603-demo)
+- **API キー無しで全部使える**(PR #13): Cloudflare Workers の中継([`proxy/`](proxy/))を作り、初回の同意で判断・確認・切替の分類が動く。モデル・出力の上限・指示文は中継側で固定し、本文は保存しない。回数の上限と、Console の金額の上限で守る
 - **配布**(PR #6・#7): CI でテストとビルドを回し、Chrome の zip と VS Code の .vsix を [Releases](https://github.com/jphacks/tkb_2603/releases/latest) に置いた。入れ方は [配布ページ](https://jphacks.github.io/tkb_2603-demo/)
 
 **開会前に作った土台**(事前の開発。評価の対象は上の Hack Day 中の差分です)
@@ -95,6 +95,6 @@ AI でコードを書くのは速くなりました。でも人の仕事は消�
 
 開発の仕方は [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) にあります。
 
-### キーなし版の公開・配布
+### キー無し版の公開
 
-共有の中継API、同意画面と利用上限を追加しました。公開URL・モデル・運用上限を設定し、実機確認してから配布します。公開担当者の操作と、配布ZIPの作り方・Chromeへの入れ方は [`docs/KEYLESS_SETUP.md`](docs/KEYLESS_SETUP.md) を参照してください。初回は本文の送信に同意するまでローカル計測で動作します。
+中継の公開・停止の手順と、配布ZIPの作り方・Chromeへの入れ方は [`docs/KEYLESS_SETUP.md`](docs/KEYLESS_SETUP.md) を参照してください。初回は本文の送信に同意するまでローカル計測で動作します。
