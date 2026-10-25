@@ -193,14 +193,64 @@
 .hi-memo { margin-top: 16px; padding: 12px; border-radius: 10px; background: var(--hi-soft); overflow-wrap: anywhere; }
 .hi-memo p { margin-top: 6px; }
 .hi-toast { position: fixed; left: 50%; top: 24px; transform: translateX(-50%); z-index: 2147483005; width: max-content; max-width: calc(100vw - 32px); padding: 12px 20px; border: 1px solid var(--hi-border); border-radius: 12px; color: var(--hi-fg); background: var(--hi-bg); box-shadow: var(--hi-shadow); font-size: 12px; }
-.hi-picto-body { transform-origin: 50px 96px; }
-.hi-picto-reach .hi-picto-body { animation: hi-reach 2.8s ease-in-out infinite; }
-.hi-picto-shoulder .hi-arm-l { transform-origin: 48px 57px; animation: hi-spin 4s linear infinite; }
-.hi-picto-shoulder .hi-arm-r { transform-origin: 52px 57px; animation: hi-spin 4s linear infinite reverse; }
-.hi-picto-sway .hi-picto-body { animation: hi-sway 3.6s ease-in-out infinite; }
-@keyframes hi-reach { 0%, 100% { transform: scaleY(.96); } 50% { transform: scaleY(1.03); } }
-@keyframes hi-spin { to { transform: rotate(360deg); } }
-@keyframes hi-sway { 0%, 100% { transform: rotate(-9deg); } 50% { transform: rotate(9deg); } }
+/* 位置決めはSVGの親g、動作は子g。関節のローカル原点を回す。
+   全部位で同じ周期を共有し、静止区間とループの始終も揃える。 */
+.hi-picto { --hi-motion-duration: 5.6s; }
+.hi-picto-body, .hi-picto-shoulders, .hi-picto-arm, .hi-picto-forearm { transform-box: view-box; }
+.hi-picto-body { transform-origin: 50px 95px; }
+.hi-picto-shoulders { transform-origin: 50px 62px; }
+.hi-picto-arm, .hi-picto-forearm { transform-origin: 0 0; }
+.hi-picto-rays { opacity: .45; }
+/* 動きを減らす設定では、腕を上げた静止姿勢を見せる。 */
+.hi-picto-reach .hi-picto-arm, .hi-picto-sway .hi-picto-arm { transform: rotate(142deg); }
+.hi-picto-reach .hi-picto-forearm, .hi-picto-sway .hi-picto-forearm { transform: rotate(12deg); }
+.hi-picto-reach .hi-picto-body { animation: hi-reach-body var(--hi-motion-duration) ease-in-out infinite; }
+.hi-picto-reach .hi-picto-arm { animation: hi-reach-arm var(--hi-motion-duration) ease-in-out infinite; }
+.hi-picto-reach .hi-picto-forearm { animation: hi-reach-elbow var(--hi-motion-duration) ease-in-out infinite; }
+.hi-picto-reach .hi-picto-rays { animation: hi-reach-rays var(--hi-motion-duration) ease-in-out infinite; }
+.hi-picto-shoulder { --hi-motion-duration: 5s; }
+.hi-picto-shoulder .hi-picto-shoulders { animation: hi-shoulder-roll var(--hi-motion-duration) ease-in-out infinite; }
+.hi-picto-shoulder .hi-picto-arm { animation: hi-shoulder-arm var(--hi-motion-duration) ease-in-out infinite; }
+.hi-picto-shoulder .hi-picto-forearm { animation: hi-shoulder-elbow var(--hi-motion-duration) ease-in-out infinite; }
+.hi-picto-sway { --hi-motion-duration: 6s; }
+.hi-picto-sway .hi-picto-body { animation: hi-sway-body var(--hi-motion-duration) ease-in-out infinite; }
+@keyframes hi-reach-body {
+  0%, 10%, 90%, 100% { transform: translateY(0); }
+  42%, 58% { transform: translateY(-2px); }
+}
+@keyframes hi-reach-arm {
+  0%, 10%, 90%, 100% { transform: rotate(0deg); }
+  42%, 58% { transform: rotate(142deg); }
+}
+@keyframes hi-reach-elbow {
+  0%, 10%, 90%, 100% { transform: rotate(0deg); }
+  42%, 58% { transform: rotate(12deg); }
+}
+@keyframes hi-reach-rays {
+  0%, 30%, 70%, 100% { opacity: 0; }
+  42%, 58% { opacity: .45; }
+}
+@keyframes hi-shoulder-roll {
+  0%, 12%, 88%, 100% { transform: translateY(0) scaleX(1); }
+  32%, 42% { transform: translateY(-4px) scaleX(.94); }
+  62% { transform: translateY(-2px) scaleX(1.03); }
+  76% { transform: translateY(1px) scaleX(1); }
+}
+@keyframes hi-shoulder-arm {
+  0%, 12%, 88%, 100% { transform: rotate(0deg); }
+  32%, 42% { transform: rotate(6deg); }
+  62%, 76% { transform: rotate(-4deg); }
+}
+@keyframes hi-shoulder-elbow {
+  0%, 12%, 88%, 100% { transform: rotate(0deg); }
+  32%, 42% { transform: rotate(-7deg); }
+  62%, 76% { transform: rotate(5deg); }
+}
+@keyframes hi-sway-body {
+  0%, 8%, 44%, 56%, 92%, 100% { transform: rotate(0deg); }
+  22%, 30% { transform: rotate(-9deg); }
+  70%, 78% { transform: rotate(9deg); }
+}
 @media (max-width: 600px) {
   .hi-detail { padding: 20px; }
   .hi-dock { right: 16px; }
