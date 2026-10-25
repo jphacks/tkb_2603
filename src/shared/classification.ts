@@ -99,4 +99,3 @@ export async function readLimitedJson(message: Request | Response, maxBytes: num
     return JSON.parse(text + decoder.decode());
   } finally { reader.releaseLock(); }
 }
-

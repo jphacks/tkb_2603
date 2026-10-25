@@ -1,0 +1,13 @@
+# .vsix に入れるのは dist/extension.js・package.json・README・LICENSE・CHANGELOG・images/icon.png だけ
+src/**
+test/**
+node_modules/**
+.vscode/**
+.vscode-test/**
+tsconfig.json
+vitest.config.*
+**/*.map
+**/*.test.ts
+.gitignore
+DEVELOPMENT.md
+package-lock.json

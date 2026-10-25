@@ -1,3 +1,8 @@
 import { configDefaults, defineConfig } from 'vitest/config';
 
-export default defineConfig({ test: { exclude: [...configDefaults.exclude, 'proxy/**'] } });
+// proxy/ と vscode/ は別の package。ルートのテストには混ぜない。
+export default defineConfig({
+  test: {
+    exclude: [...configDefaults.exclude, 'proxy/**', 'vscode/**'],
+  },
+});

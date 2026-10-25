@@ -1,0 +1,103 @@
+{
+  "name": "hitoiki",
+  "displayName": "ひといき",
+  "description": "AI と一緒に開発する作業の中身(コマンドやテストの失敗、まとまった挿入、ファイルの切替)から脳にかかる負担の目安をため、区切りのいいところでひと休みを提案します。",
+  "version": "1.0.0",
+  "publisher": "koubeyapurin",
+  "license": "MIT",
+  "icon": "images/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jphacks/tkb_2603.git",
+    "directory": "vscode"
+  },
+  "homepage": "https://github.com/jphacks/tkb_2603/tree/main/vscode#readme",
+  "bugs": {
+    "url": "https://github.com/jphacks/tkb_2603/issues"
+  },
+  "keywords": [
+    "休憩",
+    "break",
+    "focus",
+    "AI",
+    "認知負荷"
+  ],
+  "engines": {
+    "vscode": "^1.93.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "hitoiki.breakNow",
+        "title": "ひといき: 今休む"
+      },
+      {
+        "command": "hitoiki.startDeferredBreak",
+        "title": "ひといき: 休憩を始める(次の区切りで、を選んだ後)"
+      },
+      {
+        "command": "hitoiki.endBreak",
+        "title": "ひといき: 休憩を終える"
+      },
+      {
+        "command": "hitoiki.reset",
+        "title": "ひといき: 器を 0 に戻す"
+      }
+    ],
+    "configuration": {
+      "title": "ひといき",
+      "properties": {
+        "hitoiki.speed": {
+          "type": "number",
+          "default": 1,
+          "minimum": 1,
+          "maximum": 600,
+          "description": "開発・デモ用。時計を何倍速にするか(1 = 等倍。ふだんは 1 のまま)"
+        },
+        "hitoiki.threshold": {
+          "type": "number",
+          "default": 80,
+          "minimum": 50,
+          "maximum": 95,
+          "description": "休憩を提案する器のしきい値(Chrome 版と同じ 50〜95)"
+        },
+        "hitoiki.breakScale": {
+          "type": "number",
+          "default": 1,
+          "enum": [
+            0.5,
+            1,
+            1.5
+          ],
+          "enumDescriptions": [
+            "短め",
+            "標準",
+            "長め"
+          ],
+          "description": "休憩の長さの調整(Chrome 版と同じ。器 80 で標準 10 分)"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "esbuild src/extension.ts --bundle --platform=node --format=cjs --target=node20 --external:vscode --outfile=dist/extension.js --sourcemap",
+    "compile": "tsc --noEmit",
+    "test": "vitest run",
+    "e2e": "npm run build && node test/e2e/run.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "@types/vscode": "^1.93.0",
+    "@vscode/test-electron": "^3.1.0",
+    "esbuild": "^0.28.2",
+    "typescript": "5.9",
+    "vitest": "^5.0.5"
+  }
+}
