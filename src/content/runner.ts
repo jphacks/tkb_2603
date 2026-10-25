@@ -85,11 +85,11 @@ export class Runner {
       onResponseDone: (text, userText, continuation, method) => this.onResponseDone(text, userText, continuation, method),
       onErrorPaste: (lines) => {
         this.push({ kind: 'verification', t: this.state.minute, count: 1, source: 'paste' });
-        void this.log({ type: 'observation', kind: 'error_paste', detail: { lines } });
+        void this.logIfEnabled({ type: 'observation', kind: 'error_paste', detail: { lines } });
       },
       onConversationSwitch: () => {
         this.push({ kind: 'switch', t: this.state.minute, source: 'url' });
-        void this.log({ type: 'observation', kind: 'conversation_switch' });
+        void this.logIfEnabled({ type: 'observation', kind: 'conversation_switch' });
       },
       onActivity: () => this.push({ kind: 'activity', t: this.state.minute }),
       // 記録だけ(計算には使わない)。30 分タイマーとの比べに使う
@@ -418,7 +418,7 @@ export class Runner {
 
   private onPromptSent(text: string): void {
     this.push({ kind: 'prompt_sent', t: this.state.minute, chars: text.length });
-    void this.log({ type: 'observation', kind: 'prompt_sent', detail: { chars: text.length } });
+    void this.logIfEnabled({ type: 'observation', kind: 'prompt_sent', detail: { chars: text.length } });
     // 休憩中に送信したら、休憩を終えるか確認する(決定)
     if (this.state.breakState) this.askEndBreak();
   }

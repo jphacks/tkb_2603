@@ -79,6 +79,19 @@ it('同意を取り消す前に開始した遅い分類結果を反映しない'
   expect(vi.mocked(appendLog).mock.calls.some(([entry]) => entry.type === 'observation' && entry.kind === 'classified')).toBe(false);
 });
 
+it('計測を止めている時は、送信・エラーの貼り付け・会話の切替を記録しない(設定画面の「止めると何も記録しません」)', async () => {
+  vi.mocked(loadSettings).mockResolvedValue({ ...DEFAULT_SETTINGS, enabled: false });
+  vi.stubGlobal('browser', { runtime: { sendMessage: vi.fn() } });
+  const runner = new Runner(); await runner.start();
+  vi.mocked(appendLog).mockClear();
+  observerCallbacks.onPromptSent('質問');
+  observerCallbacks.onErrorPaste(3);
+  observerCallbacks.onConversationSwitch();
+  observerCallbacks.onResponseDone('回答', '質問', false, 'quiet');
+  await Promise.resolve();
+  expect(appendLog).not.toHaveBeenCalled();
+});
+
 it('回答の記録に、終わりをどちらで決めたかを入れる', async () => {
   vi.stubGlobal('browser', { runtime: { sendMessage: vi.fn() } });
   const runner = new Runner(); await runner.start();
