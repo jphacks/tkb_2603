@@ -20,10 +20,10 @@ function Arm({ right = false }: { right?: boolean }) {
 function ShoulderArm({ right = false }: { right?: boolean }) {
   return (
     <g transform={right ? 'translate(54 68) scale(-1 1)' : 'translate(46 68)'}>
-      <g className="hi-picto-shoulder-guide" strokeWidth="1.5" opacity=".4">
+      <g className="hi-picto-shoulder-guide" transform="translate(0 -2) scale(.88)" strokeWidth="1.5" opacity=".4">
         <path d="M-20 22C-39 22-47-5-34-21m-1 7 1-7-7 2" />
       </g>
-      <path className="hi-picto-shoulder-arm" d="M0 0L-26 11L-10.17-6.37Z" strokeWidth="6" />
+      <path className="hi-picto-shoulder-arm" d="M0 0L-22.88 7.68L-9.65 -7.13Z" strokeWidth="6" />
     </g>
   );
 }
