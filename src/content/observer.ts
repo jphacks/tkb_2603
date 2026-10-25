@@ -64,6 +64,8 @@ export class ChatObserver {
   private lastUserCount = -1;
   private lastUserEl: Element | null = null;
   private lastSentAt = 0;
+  /** 送信した時の最後の回答(前の回答)。字数の静けさで終わりにするのは、これと別の回答の時だけ */
+  private sentAssistantEl: Element | null = null;
   private backfillFrom = 0;
   private awaitingResponse = false;
   private typingActive = false;
@@ -163,17 +165,22 @@ export class ChatObserver {
     if (!text) return;
     this.lastUserText = text;
     this.pendingUserText = '';
+    this.noteSent();
+    this.cb.onPromptSent(text);
+  }
+
+  private noteSent(): void {
     this.awaitingResponse = true;
     this.lastSentAt = Date.now();
-    this.cb.onPromptSent(text);
+    const assistants = this.allMatch('assistant');
+    this.sentAssistantEl = assistants[assistants.length - 1] ?? null;
   }
 
   /** Enter・クリックで送信が取れなかった時に、増えた吹き出しから送信を補う(文の比較はしない。整形で一致しないため) */
   private backfillSent(bubble: Element): void {
-    if (Date.now() - this.lastSentAt < BACKFILL_WAIT_MS * 2) return;
+    if (this.awaitingResponse || Date.now() - this.lastSentAt < BACKFILL_WAIT_MS * 2) return;
     this.lastUserText = textOf(bubble);
-    this.awaitingResponse = true;
-    this.lastSentAt = Date.now();
+    this.noteSent();
     this.cb.onPromptSent(this.lastUserText);
   }
 
@@ -296,6 +303,8 @@ export class ChatObserver {
     } else if (
       this.awaitingResponse &&
       !generating &&
+      // 送信した直後の最後の回答は前の回答で、字数がずっと変わっていないので数えない
+      last !== this.sentAssistantEl &&
       lastText.length > 0 &&
       lastText.length !== this.lastAssistantLen &&
       textQuiet

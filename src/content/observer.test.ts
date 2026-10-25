@@ -185,6 +185,66 @@ describe('ChatObserver(ChatGPT)', () => {
     obs.stop();
   });
 
+  it('前の回答が残っている会話で送っても、停止ボタンが無い画面で前の回答を新しい回答と数えない', async () => {
+    addUser('前の質問');
+    addAssistant('前の回答です。');
+    const cb = callbacks();
+    const obs = new ChatObserver(CHATGPT, cb);
+    obs.start();
+    await vi.advanceTimersByTimeAsync(6000);
+    const composer = document.getElementById('prompt-textarea')!;
+    composer.textContent = '新しい質問';
+    composer.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    composer.textContent = '';
+    addUser('新しい質問');
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(cb.onResponseDone).not.toHaveBeenCalled();
+    addAssistant('新しい回答です。');
+    await vi.advanceTimersByTimeAsync(3500);
+    expect(cb.onResponseDone).toHaveBeenCalledTimes(1);
+    expect(cb.onResponseDone.mock.calls[0]!.slice(0, 4)).toEqual(['新しい回答です。', '新しい質問', false, 'quiet']);
+    obs.stop();
+  });
+
+  it('前の回答が残っている会話で、停止ボタンが送信の 1 秒後に出ても、回答は停止ボタンの 1 回だけ', async () => {
+    addUser('前の質問');
+    addAssistant('前の回答です。');
+    const cb = callbacks();
+    const obs = new ChatObserver(CHATGPT, cb);
+    obs.start();
+    await vi.advanceTimersByTimeAsync(6000);
+    const composer = document.getElementById('prompt-textarea')!;
+    composer.textContent = '新しい質問';
+    composer.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    composer.textContent = '';
+    addUser('新しい質問');
+    await vi.advanceTimersByTimeAsync(1000);
+    setStop(true);
+    const a = addAssistant('新しい');
+    await vi.advanceTimersByTimeAsync(3000);
+    a.textContent = '新しい回答です。';
+    setStop(false);
+    await vi.advanceTimersByTimeAsync(600);
+    expect(cb.onResponseDone.mock.calls.map((c) => [c[0], c[3]])).toEqual([['新しい回答です。', 'stop_button']]);
+    obs.stop();
+  });
+
+  it('吹き出しが送信より 1 秒遅れて出ても、送信を二重に数えない', async () => {
+    const cb = callbacks();
+    const obs = new ChatObserver(CHATGPT, cb);
+    obs.start();
+    await vi.advanceTimersByTimeAsync(6000);
+    const composer = document.getElementById('prompt-textarea')!;
+    composer.textContent = '質問';
+    composer.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    composer.textContent = '';
+    await vi.advanceTimersByTimeAsync(1000);
+    addUser('質問');
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(cb.onPromptSent).toHaveBeenCalledTimes(1);
+    obs.stop();
+  });
+
   it('生成中に送信ボタン(停止と兼用)を押しても送信とは数えない', async () => {
     const cb = {
       onPromptSent: vi.fn(),
