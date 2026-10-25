@@ -14,13 +14,16 @@ export interface Diagnostics {
   lastResponseChars: number;
   /** 最後の回答の先頭(実機の確認用。保存しない) */
   lastResponseHead: string;
-  completionMethod: 'stop_button' | 'quiet_dom' | null;
+  completionMethod: CompletionMethod | null;
 }
+
+/** 回答の終わりをどちらで決めたか: 停止ボタンが消えた / 最後の回答の字数が止まった */
+export type CompletionMethod = 'stop_button' | 'quiet';
 
 export interface ObserverCallbacks {
   onPromptSent(text: string): void;
   /** continuation: 終わったと思った回答が、その後も伸びた分 */
-  onResponseDone(text: string, userText: string, continuation: boolean): void;
+  onResponseDone(text: string, userText: string, continuation: boolean, method: CompletionMethod): void;
   onErrorPaste(lines: number): void;
   onConversationSwitch(): void;
   onActivity(): void;
@@ -34,7 +37,7 @@ function textOf(el: Element | null | undefined): string {
   return (el as HTMLElement | null)?.innerText ?? el?.textContent ?? '';
 }
 
-/** DOM の変化がこの秒数止まったら、生成が終わったとみなす(停止ボタンが見つからない時の代わり) */
+/** 最後の回答の字数がこの秒数変わらなければ、生成が終わったとみなす(停止ボタンが見つからない時の代わり) */
 const QUIET_MS = 2500;
 /** この秒数入力が無ければ「入力中」ではない */
 const TYPING_IDLE_MS = 3000;
@@ -48,14 +51,16 @@ export class ChatObserver {
   private lastUserText = '';
   private pendingUserText = '';
   private wasGenerating = false;
-  private lastMutationAt = 0;
+  /** 最後の回答の字数が最後に変わった時刻と、その時の要素・字数(ページのほかの所の変化は見ない) */
+  private textChangedAt = 0;
+  private seenEl: Element | null = null;
+  private seenLen = 0;
   private lastAssistantLen = 0;
   private lastAssistantEl: Element | null = null;
   private lastUserCount = -1;
   private awaitingResponse = false;
   private typingActive = false;
   private timers: number[] = [];
-  private observer: MutationObserver | null = null;
 
   constructor(
     readonly site: SiteDef,
@@ -79,10 +84,6 @@ export class ChatObserver {
     document.addEventListener('paste', this.onPaste, true);
     document.addEventListener('click', this.onClick, true);
     window.addEventListener('scroll', this.onScroll, true);
-    this.observer = new MutationObserver(() => {
-      this.lastMutationAt = Date.now();
-    });
-    this.observer.observe(document.body, { childList: true, subtree: true, characterData: true });
     this.timers.push(window.setInterval(this.poll, 500));
   }
 
@@ -92,7 +93,6 @@ export class ChatObserver {
     document.removeEventListener('paste', this.onPaste, true);
     document.removeEventListener('click', this.onClick, true);
     window.removeEventListener('scroll', this.onScroll, true);
-    this.observer?.disconnect();
     for (const t of this.timers) clearInterval(t);
     this.timers = [];
   }
@@ -244,6 +244,12 @@ export class ChatObserver {
 
     const last = assistants[assistants.length - 1];
     const lastText = this.assistantText(last);
+    if (last !== this.seenEl || lastText.length !== this.seenLen) {
+      this.seenEl = last ?? null;
+      this.seenLen = lastText.length;
+      this.textChangedAt = Date.now();
+    }
+    const textQuiet = Date.now() - this.textChangedAt > QUIET_MS;
 
     // 送信を取り逃しても、生成中にユーザーの吹き出しが増えたら送信とみなす(文の比較はしない。整形で一致しないため)
     if (this.lastUserCount < 0) this.lastUserCount = users.length;
@@ -259,7 +265,7 @@ export class ChatObserver {
 
     if (!this.wasGenerating && generating) this.cb.onGenerationStart?.();
 
-    // 生成の終わり: 停止ボタンが消えた、または停止ボタンが無い画面で DOM の変化が止まった
+    // 生成の終わり: 停止ボタンが消えた、または停止ボタンが無い画面で最後の回答の字数が止まった
     let done = false;
     if (this.wasGenerating && !generating) {
       done = true;
@@ -269,10 +275,10 @@ export class ChatObserver {
       !generating &&
       lastText.length > 0 &&
       lastText.length !== this.lastAssistantLen &&
-      Date.now() - this.lastMutationAt > QUIET_MS
+      textQuiet
     ) {
       done = true;
-      this.diagnostics.completionMethod = 'quiet_dom';
+      this.diagnostics.completionMethod = 'quiet';
     }
     this.wasGenerating = generating;
 
@@ -285,19 +291,19 @@ export class ChatObserver {
       this.lastResponseDoneAt = Date.now();
       this.diagnostics.lastResponseChars = lastText.length;
       this.diagnostics.lastResponseHead = lastText.slice(0, 24);
-      this.cb.onResponseDone(text, this.lastUserText, continuation);
+      this.cb.onResponseDone(text, this.lastUserText, continuation, this.diagnostics.completionMethod!);
     } else if (
       // 静かになって終わりとみなした後も、同じ回答が伸びたら差分を足す(考える系のモデルは途中で長く止まる)
       !generating &&
       last === this.lastAssistantEl &&
       lastText.length > this.lastAssistantLen &&
-      Date.now() - this.lastMutationAt > QUIET_MS
+      textQuiet
     ) {
       const delta = lastText.slice(this.lastAssistantLen);
       this.lastAssistantLen = lastText.length;
       this.lastResponseDoneAt = Date.now();
       this.diagnostics.lastResponseChars = lastText.length;
-      this.cb.onResponseDone(delta, this.lastUserText, true);
+      this.cb.onResponseDone(delta, this.lastUserText, true, 'quiet');
     }
   };
 }

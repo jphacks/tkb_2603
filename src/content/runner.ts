@@ -28,7 +28,7 @@ import {
   saveSettings,
   type Settings,
 } from '../shared/settings';
-import { ChatObserver } from './observer';
+import { ChatObserver, type CompletionMethod } from './observer';
 import { detectSite } from './sites';
 import { canClassify, CONSENT_VERSION } from '../shared/privacy';
 
@@ -82,7 +82,7 @@ export class Runner {
   constructor() {
     this.observer = new ChatObserver(detectSite(location.hostname), {
       onPromptSent: (text) => this.onPromptSent(text),
-      onResponseDone: (text, userText, continuation) => this.onResponseDone(text, userText, continuation),
+      onResponseDone: (text, userText, continuation, method) => this.onResponseDone(text, userText, continuation, method),
       onErrorPaste: (lines) => {
         this.push({ kind: 'verification', t: this.state.minute, count: 1, source: 'paste' });
         void this.log({ type: 'observation', kind: 'error_paste', detail: { lines } });
@@ -423,13 +423,13 @@ export class Runner {
     if (this.state.breakState) this.askEndBreak();
   }
 
-  /** continuation: 終わったと思った回答が、その後も伸びた分(読む量だけ足し、分類はしない) */
-  private onResponseDone(text: string, userText: string, continuation: boolean): void {
+  /** continuation: 終わったと思った回答が、その後も伸びた分(読む量だけ足し、分類はしない)。end: 終わりをどちらで決めたか */
+  private onResponseDone(text: string, userText: string, continuation: boolean, end: CompletionMethod): void {
     // 計測を止めている時は、記録も API への送信もしない
     if (!this.settings.enabled) return;
     const { jaChars, enWords } = splitText(text);
     this.push({ kind: 'response_done', t: this.state.minute, chars: jaChars, enWords });
-    void this.log({ type: 'observation', kind: 'response_done', detail: { jaChars, enWords, continuation } });
+    void this.log({ type: 'observation', kind: 'response_done', detail: { jaChars, enWords, continuation, end } });
     if (!continuation) void this.classify(userText, text);
   }
 

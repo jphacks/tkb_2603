@@ -23,7 +23,12 @@ vi.mock('./observer', () => ({
   },
 }));
 
-let observerCallbacks: { onResponseDone(text: string, user: string, continuation: boolean): void };
+let observerCallbacks: {
+  onResponseDone(text: string, user: string, continuation: boolean, method?: 'stop_button' | 'quiet'): void;
+  onPromptSent(text: string): void;
+  onErrorPaste(lines: number): void;
+  onConversationSwitch(): void;
+};
 
 let snap: UiSnapshot;
 let unsubscribe: () => void;
@@ -72,6 +77,16 @@ it('同意を取り消す前に開始した遅い分類結果を反映しない'
   expect(snap.state.recent.decision).toHaveLength(0);
   expect(snap.lastClassify).toBeNull();
   expect(vi.mocked(appendLog).mock.calls.some(([entry]) => entry.type === 'observation' && entry.kind === 'classified')).toBe(false);
+});
+
+it('回答の記録に、終わりをどちらで決めたかを入れる', async () => {
+  vi.stubGlobal('browser', { runtime: { sendMessage: vi.fn() } });
+  const runner = new Runner(); await runner.start();
+  observerCallbacks.onPromptSent('質問');
+  observerCallbacks.onResponseDone('回答', '質問', false, 'quiet');
+  const kinds = vi.mocked(appendLog).mock.calls.map(([e]) => e).filter((e) => e.type === 'observation');
+  expect(kinds.map((e) => e.type === 'observation' && e.kind)).toEqual(['prompt_sent', 'response_done']);
+  expect(kinds[1]!.type === 'observation' && kinds[1]!.detail?.end).toBe('quiet');
 });
 
 describe('休憩の開始をユーザーに任せる', () => {

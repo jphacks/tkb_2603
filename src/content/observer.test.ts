@@ -78,6 +78,7 @@ describe('ChatObserver(ChatGPT)', () => {
     expect(cb.onResponseDone).toHaveBeenCalledTimes(1);
     expect(cb.onResponseDone.mock.calls[0]![0]).toContain('4 つに分ける');
     expect(cb.onResponseDone.mock.calls[0]![1]).toBe('React でフォームを作って');
+    expect(cb.onResponseDone.mock.calls[0]![3]).toBe('stop_button');
 
     // 同じ回答を 2 回数えない
     await vi.advanceTimersByTimeAsync(5000);
@@ -89,6 +90,54 @@ describe('ChatObserver(ChatGPT)', () => {
     expect(cb.onResponseDone).toHaveBeenCalledTimes(2);
     expect(cb.onResponseDone.mock.calls[1]![0]).toBe(' 続きの説明です。');
     expect(cb.onResponseDone.mock.calls[1]![2]).toBe(true);
+    obs.stop();
+  });
+
+  it('停止ボタンが無い画面: ページのほかの所が 1 秒ごとに変わっても、回答の字数が 2.5 秒止まれば終わり', async () => {
+    const cb = callbacks();
+    const obs = new ChatObserver(CHATGPT, cb);
+    obs.start();
+    // 回答と関係の無い所(サイドバーなど)が 1 秒ごとに変わり続ける
+    const side = document.createElement('div');
+    document.body.appendChild(side);
+    const ticker = window.setInterval(() => (side.textContent = String(Date.now())), 1000);
+    const composer = document.getElementById('prompt-textarea')!;
+    composer.textContent = '質問';
+    composer.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    composer.textContent = '';
+    await vi.advanceTimersByTimeAsync(400);
+    addUser('質問');
+    addAssistant('回答です。最後まで書きました。');
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(cb.onResponseDone).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(cb.onResponseDone).toHaveBeenCalledTimes(1);
+    expect(cb.onResponseDone.mock.calls[0]![2]).toBe(false);
+    expect(cb.onResponseDone.mock.calls[0]![3]).toBe('quiet');
+    expect(obs.diagnostics.completionMethod).toBe('quiet');
+    clearInterval(ticker);
+    obs.stop();
+  });
+
+  it('停止ボタンが無い画面: 回答の字が伸び続けている間は終わりにしない', async () => {
+    const cb = callbacks();
+    const obs = new ChatObserver(CHATGPT, cb);
+    obs.start();
+    const composer = document.getElementById('prompt-textarea')!;
+    composer.textContent = '質問';
+    composer.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    composer.textContent = '';
+    await vi.advanceTimersByTimeAsync(400);
+    addUser('質問');
+    const a = addAssistant('回答');
+    for (let i = 0; i < 10; i++) {
+      a.textContent += 'が続きます';
+      await vi.advanceTimersByTimeAsync(1000);
+    }
+    expect(cb.onResponseDone).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(cb.onResponseDone).toHaveBeenCalledTimes(1);
+    expect(cb.onResponseDone.mock.calls[0]![0]).toBe('回答' + 'が続きます'.repeat(10));
     obs.stop();
   });
 
