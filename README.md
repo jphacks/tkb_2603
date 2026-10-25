@@ -4,7 +4,7 @@
 
 <!-- デモ動画ができたら、上の画像と YouTube の URL を差し替える -->
 
-**試す: [入れ方と配布ページ](https://jphacks.github.io/tkb_2603-demo/)**(Chrome 版の zip と VS Code 版の .vsix は [Releases](https://github.com/jphacks/tkb_2603/releases/latest))
+**試す: [入れ方と配布ページ](https://jphacks.github.io/tkb_2603-demo/)**(Chrome 版の zip は [Releases](https://github.com/jphacks/tkb_2603/releases/latest)。VS Code 版は [Marketplace](https://marketplace.visualstudio.com/items?itemName=koubeyapurin.hitoiki) で「ひといき」と検索)
 
 ## 製品概要
 ### 背景(製品開発のきっかけ、課題等）
@@ -82,7 +82,7 @@ AI でコードを書くのは速くなりました。でも人の仕事は消�
 - **VS Code 拡張**(PR #5): 同じ計算をエディタの出来事で動かし、提案・休憩・おかえりまで Chrome と同じ流れにした。[`vscode/src/tracker.ts`](vscode/src/tracker.ts)、[`vscode/src/extension.ts`](vscode/src/extension.ts)。動かし方は [`vscode/DEVELOPMENT.md`](vscode/DEVELOPMENT.md)
 - **本番とデモを分けた**(PR #8): 倍速・たまる速さ・診断は本番では隠し([`src/shared/flags.ts`](src/shared/flags.ts))、パネルの詳細に「30 分ごとのタイマーだったら」の今日の比べを 1 行出す([`src/shared/timerCompare.ts`](src/shared/timerCompare.ts))。デモ用は [jphacks/tkb_2603-demo](https://github.com/jphacks/tkb_2603-demo)
 - **API キー無しで全部使える**(PR #13): Cloudflare Workers の中継([`proxy/`](proxy/))を作り、初回の同意で判断・確認・切替の分類が動く。モデル・出力の上限・指示文は中継側で固定し、本文は保存しない。回数の上限と、Console の金額の上限で守る
-- **配布**(PR #6・#7): CI でテストとビルドを回し、Chrome の zip と VS Code の .vsix を [Releases](https://github.com/jphacks/tkb_2603/releases/latest) に置いた。入れ方は [配布ページ](https://jphacks.github.io/tkb_2603-demo/)
+- **配布**(PR #6・#7・#11): CI でテストとビルドを回し、Chrome の zip を [Releases](https://github.com/jphacks/tkb_2603/releases/latest) に置き、VS Code 版を [Marketplace に公開](https://marketplace.visualstudio.com/items?itemName=koubeyapurin.hitoiki)した。入れ方は [配布ページ](https://jphacks.github.io/tkb_2603-demo/)
 
 **開会前に作った土台**(事前の開発。評価の対象は上の Hack Day 中の差分です)
 - コミット fac9ea6・b7d760a・1f5a4ff(10/24 未明)
