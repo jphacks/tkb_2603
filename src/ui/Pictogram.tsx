@@ -15,6 +15,19 @@ function Arm({ right = false }: { right?: boolean }) {
   );
 }
 
+// 手を肩に添えたまま、肘の位置を楕円上で動かす。右側は左右反転。
+function ShoulderArm({ right = false }: { right?: boolean }) {
+  return (
+    <g transform={right ? 'translate(64 66) scale(-1 1)' : 'translate(36 66)'}>
+      <g className="hi-picto-shoulder-guide" strokeWidth="1.5" opacity=".4">
+        <path d="M-20 22C-39 22-47-5-34-21m-1 7 1-7-7 2" />
+      </g>
+      <path className="hi-picto-shoulder-arm" d="M0 0L-22 11L4-11" strokeWidth="8" />
+      <circle className="hi-picto-hand" cx="4" cy="-11" r="4.5" fill="currentColor" stroke="none" />
+    </g>
+  );
+}
+
 export function Pictogram({ kind }: { kind: StretchId }) {
   return (
     <svg className={`hi-picto hi-picto-${kind}`} width="128" height="136" viewBox="0 0 128 136" aria-hidden="true">
@@ -26,9 +39,8 @@ export function Pictogram({ kind }: { kind: StretchId }) {
           <g className="hi-picto-body">
             <path d="M50 53v42" />
             <g className="hi-picto-shoulders">
-              <path d="M38 62h24" />
-              <Arm />
-              <Arm right />
+              <path d={kind === 'shoulder' ? 'M36 66h28' : 'M38 62h24'} />
+              {kind === 'shoulder' ? <><ShoulderArm /><ShoulderArm right /></> : <><Arm /><Arm right /></>}
             </g>
             <circle cx="50" cy="35" r="18" fill="currentColor" stroke="none" />
             <g className="hi-picto-face" stroke="var(--hi-bg)" strokeWidth="2" fill="none"><path d="M39 32q3-4 6 0m10 0q3-4 6 0M44 42q6 7 12 0" /></g>
