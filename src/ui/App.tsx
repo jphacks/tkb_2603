@@ -297,7 +297,7 @@ function trapFocus(event: KeyboardEvent<HTMLElement>) {
 function useModalFocus(ref: RefObject<HTMLDivElement | null>) {
   useEffect(() => {
     const root = ref.current?.getRootNode() as Document | ShadowRoot;
-    const previous = root?.activeElement as HTMLElement | null;
+    const previous = (root?.activeElement ?? document.activeElement) as HTMLElement | null;
     ref.current?.focus({ preventScroll: true });
     return () => { if (previous?.isConnected) previous.focus({ preventScroll: true }); };
   }, [ref]);
@@ -308,7 +308,19 @@ function BreakOverlay({ snap, runner }: { snap: UiSnapshot; runner: Runner }) {
   const stretch = b.stretch ?? 'reach';
   const [now, setNow] = useState(Date.now());
   const modal = useRef<HTMLDivElement>(null);
+  const closeButton = useRef<HTMLButtonElement>(null);
+  const endTrigger = useRef<HTMLElement | null>(null);
+  const wasConfirming = useRef(false);
   useModalFocus(modal);
+  useEffect(() => {
+    if (wasConfirming.current && !snap.confirmEndBreak) (endTrigger.current ?? closeButton.current)?.focus({ preventScroll: true });
+    wasConfirming.current = snap.confirmEndBreak;
+  }, [snap.confirmEndBreak]);
+  const askToEnd = (trigger?: HTMLElement) => {
+    const root = modal.current?.getRootNode() as Document | ShadowRoot;
+    endTrigger.current = trigger ?? root?.activeElement as HTMLElement | null;
+    runner.askEndBreak();
+  };
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 250);
     return () => clearInterval(id);
@@ -322,13 +334,14 @@ function BreakOverlay({ snap, runner }: { snap: UiSnapshot; runner: Runner }) {
   return (
     <div className="hi-overlay">
       <div ref={modal} className="hi-card hi-break" role="dialog" aria-modal="true" aria-label="休憩中" tabIndex={-1}
+        inert={snap.confirmEndBreak} aria-hidden={snap.confirmEndBreak || undefined}
         onKeyDown={(event) => {
           trapFocus(event);
-          if (event.key === 'Escape') { event.stopPropagation(); snap.confirmEndBreak ? runner.cancelEndBreak() : runner.askEndBreak(); }
+          if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); askToEnd(); }
         }}>
         <header className="hi-head hi-break-head">
           <div className="hi-heading"><Icon name="leaf" /><h2>休憩中</h2></div>
-          <button className="hi-icon-btn" onClick={() => runner.askEndBreak()} aria-label="休憩を終える"><Icon name="close" /></button>
+          <button ref={closeButton} className="hi-icon-btn" onClick={(event) => askToEnd(event.currentTarget)} aria-label="休憩を終える"><Icon name="close" /></button>
         </header>
         <div className="hi-timer">
           <svg className="hi-timer-ring" width="232" height="232" viewBox="0 0 232 232" aria-hidden="true">
@@ -344,11 +357,29 @@ function BreakOverlay({ snap, runner }: { snap: UiSnapshot; runner: Runner }) {
           <summary>復帰メモ<Icon name="chevron" /></summary>
           <label className="hi-memo-field">戻ったらやること<input className="hi-input" placeholder="例：テスト結果を確認する" value={b.memo} maxLength={80} onChange={(event) => runner.setMemo(event.target.value)} /></label>
         </details>
-        <button className="hi-btn hi-full hi-end-break" onClick={() => runner.askEndBreak()}>休憩を終える</button>
-        {snap.confirmEndBreak && <div className="hi-confirm" role="group" aria-label="休憩終了の確認"><p>休憩を終えますか？</p><div className="hi-actions"><button className="hi-btn hi-primary" onClick={() => runner.endBreakEarly()}>終える</button><button className="hi-btn" onClick={() => runner.cancelEndBreak()}>続ける</button></div></div>}
+        <button className="hi-btn hi-full hi-end-break" onClick={(event) => askToEnd(event.currentTarget)}>休憩を終える</button>
       </div>
+      {snap.confirmEndBreak && <EndBreakConfirmation runner={runner} />}
     </div>
   );
+}
+
+function EndBreakConfirmation({ runner }: { runner: Runner }) {
+  const keepResting = useRef<HTMLButtonElement>(null);
+  useEffect(() => { keepResting.current?.focus({ preventScroll: true }); }, []);
+  return <div className="hi-confirm-overlay">
+    <div className="hi-card hi-confirm" role="alertdialog" aria-modal="true" aria-labelledby="hi-confirm-title"
+      onKeyDown={(event) => {
+        trapFocus(event);
+        if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); runner.cancelEndBreak(); }
+      }}>
+      <h2 id="hi-confirm-title">休憩を終えますか？</h2>
+      <div className="hi-actions">
+        <button className="hi-btn hi-primary" onClick={() => runner.endBreakEarly()}>終える</button>
+        <button ref={keepResting} className="hi-btn" onClick={() => runner.cancelEndBreak()}>続ける</button>
+      </div>
+    </div>
+  </div>;
 }
 
 function Welcome({ snap, runner }: { snap: UiSnapshot; runner: Runner }) {
