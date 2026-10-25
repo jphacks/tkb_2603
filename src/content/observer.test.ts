@@ -141,6 +141,50 @@ describe('ChatObserver(ChatGPT)', () => {
     obs.stop();
   });
 
+  it('送信を取り逃しても、吹き出しが最後に 1 つ増えたら(生成中が取れなくても)送信を補う。Enter で取れた時は二重にしない', async () => {
+    const cb = callbacks();
+    addUser('前の質問');
+    const obs = new ChatObserver(CHATGPT, cb);
+    obs.start();
+    await vi.advanceTimersByTimeAsync(5500);
+    // Enter が取れない画面: 吹き出しだけが増える。停止ボタンも出ない
+    addUser('取り逃した質問');
+    await vi.advanceTimersByTimeAsync(400);
+    expect(cb.onPromptSent).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(800);
+    expect(cb.onPromptSent).toHaveBeenCalledTimes(1);
+    expect(cb.onPromptSent).toHaveBeenCalledWith('取り逃した質問');
+
+    // Enter で取れた送信は、吹き出しから二重に数えない
+    await vi.advanceTimersByTimeAsync(5000);
+    const composer = document.getElementById('prompt-textarea')!;
+    composer.textContent = '次の質問';
+    composer.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    composer.textContent = '';
+    addUser('次の質問');
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(cb.onPromptSent).toHaveBeenCalledTimes(2);
+    expect(cb.onPromptSent.mock.calls[1]![0]).toBe('次の質問');
+    obs.stop();
+  });
+
+  it('開いた直後に描かれた吹き出しや、上に読み込まれた古い吹き出しは送信と数えない', async () => {
+    const cb = callbacks();
+    const obs = new ChatObserver(CHATGPT, cb);
+    obs.start();
+    await vi.advanceTimersByTimeAsync(600);
+    addUser('開いた会話の 1 通目'); // 開いた直後に遅れて描かれる
+    await vi.advanceTimersByTimeAsync(5500);
+    // 上へのスクロールで古い吹き出しが先頭に 1 つ読み込まれる(最後の吹き出しは変わらない)
+    const old = document.createElement('div');
+    old.setAttribute('data-message-author-role', 'user');
+    old.textContent = '古い質問';
+    document.getElementById('thread')!.prepend(old);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(cb.onPromptSent).not.toHaveBeenCalled();
+    obs.stop();
+  });
+
   it('生成中に送信ボタン(停止と兼用)を押しても送信とは数えない', async () => {
     const cb = {
       onPromptSent: vi.fn(),

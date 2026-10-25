@@ -41,6 +41,10 @@ function textOf(el: Element | null | undefined): string {
 const QUIET_MS = 2500;
 /** この秒数入力が無ければ「入力中」ではない */
 const TYPING_IDLE_MS = 3000;
+/** 吹き出しが増えてから、この間に Enter・クリックの送信が記録されなければ、吹き出しから送信を補う */
+const BACKFILL_WAIT_MS = 600;
+/** 読み込み・会話の切替の直後は、吹き出しが描かれていくだけなので補わない */
+const BACKFILL_SETTLE_MS = 5000;
 
 export class ChatObserver {
   diagnostics: Diagnostics;
@@ -58,6 +62,9 @@ export class ChatObserver {
   private lastAssistantLen = 0;
   private lastAssistantEl: Element | null = null;
   private lastUserCount = -1;
+  private lastUserEl: Element | null = null;
+  private lastSentAt = 0;
+  private backfillFrom = 0;
   private awaitingResponse = false;
   private typingActive = false;
   private timers: number[] = [];
@@ -79,6 +86,7 @@ export class ChatObserver {
   }
 
   start(): void {
+    this.backfillFrom = Date.now() + BACKFILL_SETTLE_MS;
     document.addEventListener('keydown', this.onKeyDown, true);
     document.addEventListener('input', this.onInput, true);
     document.addEventListener('paste', this.onPaste, true);
@@ -156,7 +164,17 @@ export class ChatObserver {
     this.lastUserText = text;
     this.pendingUserText = '';
     this.awaitingResponse = true;
+    this.lastSentAt = Date.now();
     this.cb.onPromptSent(text);
+  }
+
+  /** Enter・クリックで送信が取れなかった時に、増えた吹き出しから送信を補う(文の比較はしない。整形で一致しないため) */
+  private backfillSent(bubble: Element): void {
+    if (Date.now() - this.lastSentAt < BACKFILL_WAIT_MS * 2) return;
+    this.lastUserText = textOf(bubble);
+    this.awaitingResponse = true;
+    this.lastSentAt = Date.now();
+    this.cb.onPromptSent(this.lastUserText);
   }
 
   private onKeyDown = (e: KeyboardEvent) => {
@@ -226,6 +244,7 @@ export class ChatObserver {
         this.lastAssistantEl = null;
         this.lastUserCount = -1;
         this.awaitingResponse = false;
+        this.backfillFrom = Date.now() + BACKFILL_SETTLE_MS;
         this.cb.onConversationSwitch();
       } else if (prevId === null) {
         this.lastUserCount = -1;
@@ -251,16 +270,20 @@ export class ChatObserver {
     }
     const textQuiet = Date.now() - this.textChangedAt > QUIET_MS;
 
-    // 送信を取り逃しても、生成中にユーザーの吹き出しが増えたら送信とみなす(文の比較はしない。整形で一致しないため)
-    if (this.lastUserCount < 0) this.lastUserCount = users.length;
-    if (users.length > this.lastUserCount) {
-      if (!this.awaitingResponse && generating) {
-        const userText = textOf(users[users.length - 1]);
-        this.lastUserText = userText;
-        this.awaitingResponse = true;
-        this.cb.onPromptSent(userText);
+    // 送信を取り逃しても、ユーザーの吹き出しが最後に 1 つ増えたら、少し待って送信とみなす(生成中が取れない画面でも)。
+    // 上へのスクロールで古い会話が読み込まれた時は最後の吹き出しが変わらず、会話を開いた時はまとめて増えるので数えない
+    const newestUser = users[users.length - 1] ?? null;
+    if (this.lastUserCount < 0) {
+      this.lastUserCount = users.length;
+      this.lastUserEl = newestUser;
+    }
+    if (users.length !== this.lastUserCount) {
+      if (users.length === this.lastUserCount + 1 && newestUser !== this.lastUserEl && Date.now() >= this.backfillFrom) {
+        const bubble = newestUser!;
+        window.setTimeout(() => this.backfillSent(bubble), BACKFILL_WAIT_MS);
       }
       this.lastUserCount = users.length;
+      this.lastUserEl = newestUser;
     }
 
     if (!this.wasGenerating && generating) this.cb.onGenerationStart?.();
