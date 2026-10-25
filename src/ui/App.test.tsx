@@ -231,6 +231,64 @@ describe.each([false, true])('DEMO = %s', (demo) => {
       expect(container.querySelector('aside')).not.toBeNull();
     });
 
+    it('右上の×で終了確認を開き、Escで休憩を保って×へ戻れる', async () => {
+      snap = { ...snap, state: { ...snap.state, breakState: { startedAt: 0, plannedMin: 10, memo: '続きを確認' } } };
+      await publish();
+      const close = container.querySelector<HTMLButtonElement>('.hi-break-head button')!;
+      await act(async () => close.click());
+      expect(runner.askEndBreak).toHaveBeenCalledOnce();
+      snap = { ...snap, confirmEndBreak: true };
+      await publish();
+      const dialog = container.querySelector('[role="alertdialog"]')!;
+      expect(dialog.textContent).toContain('休憩を終えますか？');
+      expect(document.activeElement).toBe(button('続ける'));
+      expect(container.querySelector('.hi-break')?.hasAttribute('inert')).toBe(true);
+      expect(container.querySelector('.hi-break')?.getAttribute('aria-hidden')).toBe('true');
+      await act(async () => dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+      expect(runner.cancelEndBreak).toHaveBeenCalledOnce();
+      snap = { ...snap, confirmEndBreak: false };
+      await publish();
+      expect(container.querySelector('[role="alertdialog"]')).toBeNull();
+      expect(container.querySelector('.hi-break')?.hasAttribute('inert')).toBe(false);
+      expect(document.activeElement).toBe(close);
+      expect(container.querySelector('input')?.value).toBe('続きを確認');
+      expect(runner.endBreakEarly).not.toHaveBeenCalled();
+    });
+
+    it('下の終了ボタンからの確認も、続けると元のボタンとタイマーへ戻る', async () => {
+      snap = { ...snap, state: { ...snap.state, breakState: { startedAt: 0, plannedMin: 10, memo: '' } } };
+      await publish();
+      const timer = container.querySelector('[role="timer"]')?.textContent;
+      const end = container.querySelector<HTMLButtonElement>('.hi-end-break')!;
+      await act(async () => end.click());
+      expect(runner.askEndBreak).toHaveBeenCalledOnce();
+      snap = { ...snap, confirmEndBreak: true };
+      await publish();
+      await click('続ける');
+      expect(runner.cancelEndBreak).toHaveBeenCalledOnce();
+      snap = { ...snap, confirmEndBreak: false };
+      await publish();
+      expect(document.activeElement).toBe(end);
+      expect(container.querySelector('[role="timer"]')?.textContent).toBe(timer);
+    });
+
+    it('終了を確定するとオーバーレイを除き、元のページの入力欄へ戻る', async () => {
+      const composer = document.createElement('input');
+      document.body.append(composer);
+      composer.focus();
+      snap = { ...snap, state: { ...snap.state, breakState: { startedAt: 0, plannedMin: 10, memo: '' } } };
+      await publish();
+      await click('休憩を終える');
+      snap = { ...snap, confirmEndBreak: true };
+      await publish();
+      await click('終える');
+      expect(runner.endBreakEarly).toHaveBeenCalledOnce();
+      snap = { ...snap, confirmEndBreak: false, state: { ...snap.state, breakState: null } };
+      await publish();
+      expect(container.querySelector('.hi-overlay')).toBeNull();
+      expect(document.activeElement).toBe(composer);
+    });
+
     it('秒表示は操作による再描画で戻らず、倍速と新しい時計に追従する', async () => {
       snap = { ...snap, settings: { ...snap.settings, speed: 10 }, clock: { minute: 2.5, sampledAt: Date.now() }, state: { ...snap.state, minute: 2, breakState: { startedAt: 0, plannedMin: 10, memo: '' } } };
       await publish();
