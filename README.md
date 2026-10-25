@@ -76,18 +76,18 @@ AI でコードを書くのは速くなりました。でも人の仕事は消�
 
 1. **API キー無しで、安全に分類を使える中継**(PR #13、commit `4ae9678`、[`proxy/src/handler.ts`](proxy/src/handler.ts)・[`proxy/src/quota.ts`](proxy/src/quota.ts)・[`src/shared/classification-service.ts`](src/shared/classification-service.ts))
    - 公開 URL は誰でも叩ける前提で作りました。中継が受けるのは本文 2 つと直前の作業名だけで、ほかの項目があれば断ります。モデル・出力の上限・指示文・JSON Schema は中継側で固定し、「誰でも使える Claude の入口」にならないようにしました
-   - 回数の上限は、Durable Object(SQLite)で 1 インストールごと・全体の両方を、同時に来ても数え間違えない形で予約します。リダイレクトは失敗として扱い、キーや本文をほかの URL へ渡しません。本文はログにも残しません
+   - 回数の上限は、Durable Object(SQLite)で 1 インストールごと・全体の両方を、同時に来ても数え間違えない形で予約します。端末 ID は自己申告なので、最後の守りは全体の上限(1 日 1,000 回・1 分 30 回)と、Anthropic Console の月の金額の上限です。リダイレクトは失敗として扱い、キーや本文をほかの URL へ渡しません。本文はログにも残しません
    - 拡張の側は、最初に説明を出して同意を取ってから送ります。同意を取り消したり設定を変えたりすると、途中の通信も止め、古い分類の結果は使いません
 2. **画面の作りが違っても、送信と回答の終わりを取りこぼさない観測係**(PR #2・#20、commit `356a159`・`488b054`、[`src/content/observer.ts`](src/content/observer.ts)・[`src/content/sites.ts`](src/content/sites.ts))
    - サイトごとの違いは読み取り方の定義だけにして、ChatGPT・Claude・Gemini で同じ観測係を使います
-   - 回答の終わりは「停止ボタンが消えた」で決め、停止ボタンが見つからない画面では「**最後の回答の字数が 2.5 秒変わらない**」で決めます。送信した時点の最後の回答を覚えておき、それとは別の回答のときだけ終わりとみなすので、前の回答を新しい回答と取り違えません。送信の取りこぼしは、吹き出しが 1 つ増えたことから補います
+   - 回答の終わりは「停止ボタンが消えた」で決め、停止ボタンが取れない時は「**最後の回答の字数が 2.5 秒変わらない**」で決めます。送信した時点の最後の回答を覚えておき、それとは別の回答のときだけ終わりとみなすので、前の回答を新しい回答と取り違えません。送信の取りこぼしは、吹き出しが 1 つ増えたことから補います
    - 実際の画面で取りこぼした場面(前の回答が残っている会話で送る、吹き出しが遅れて出る など)は、テストにして直しました
 3. **同じ計算を、VS Code の出来事で動かす**(PR #5、commit `40f78c0`、[`vscode/src/tracker.ts`](vscode/src/tracker.ts))
-   - 計算([`src/core/`](src/core/))はそのまま使い、エディタの出来事を同じ形に直して入れます。まとまった挿入は読む量、ターミナルやタスクの失敗は確認・検証、ファイルの切替は切替です
+   - 同じ計算([`src/core/`](src/core/))を使い(読む量の上限だけエディタ向けに変えて)、エディタの出来事を同じ形に直して入れます。まとまった挿入は読む量、ターミナルやタスクの失敗は確認・検証、ファイルの切替は切替です
    - 区切りの判定もエディタ向けに作りました。入力が 3 秒止まり、終わる種類のタスクもデバッグも動いておらず、窓が前にある時だけ声をかけます
    - [Marketplace に公開](https://marketplace.visualstudio.com/items?itemName=koubeyapurin.hitoiki)し、「ひといき」と検索して入れられます
 
-**Hack Day 中に作ったもの(全部)**(開会時刻のタグ `hackday-start` より後)
+**Hack Day 中に作ったもの(主なもの)**(開会時刻のタグ `hackday-start` より後)
 - **画面を参照デザインに合わせて作り直し、休憩を本人が始める形にした**(PR #1): [`src/ui/App.tsx`](src/ui/App.tsx)、[`src/ui/useDockPosition.ts`](src/ui/useDockPosition.ts)、[`src/ui/Pictogram.tsx`](src/ui/Pictogram.tsx)
 - **Claude・Gemini に対応**(PR #2): 画面の読み取りをサイト別の定義([`src/content/sites.ts`](src/content/sites.ts))と共通の観測係([`src/content/observer.ts`](src/content/observer.ts))に分けた。新しい会話の 1 通目を取り逃さない
 - **記録を足した**(PR #2): どのサイトか、入力の始まりと終わり、生成の始まり、分類のトークン数
@@ -96,6 +96,7 @@ AI でコードを書くのは速くなりました。でも人の仕事は消�
 - **本番とデモを分けた**(PR #8): 倍速・たまる速さ・診断は本番では隠し([`src/shared/flags.ts`](src/shared/flags.ts))、パネルの詳細に「30 分ごとのタイマーだったら」の今日の比べを 1 行出す([`src/shared/timerCompare.ts`](src/shared/timerCompare.ts))。デモ用は [jphacks/tkb_2603-demo](https://github.com/jphacks/tkb_2603-demo)
 - **API キー無しで全部使える**(PR #13): Cloudflare Workers の中継([`proxy/`](proxy/))を作り、初回の同意で判断・確認・切替の分類が動く。中継の公開・停止の手順は [`docs/KEYLESS_SETUP.md`](docs/KEYLESS_SETUP.md)
 - **ChatGPT の取りこぼしを直した**(PR #20): 回答の終わりの決め方と、送信の補い
+- **実機確認の手順と、記録を確かめるスクリプト**(PR #18): [`docs/VERIFICATION.md`](docs/VERIFICATION.md)、[`scripts/check-log.ts`](scripts/check-log.ts)
 - **判断の表示**(PR #19): 計測を始めた直後は 0% と出し、分類できない時は「未計測」と理由を出して区別する
 - **配布**(PR #6・#7・#11): CI でテストとビルドを回し、Chrome の zip を [Releases](https://github.com/jphacks/tkb_2603/releases/latest) に置き、VS Code 版を [Marketplace に公開](https://marketplace.visualstudio.com/items?itemName=koubeyapurin.hitoiki)した。入れ方は [配布ページ](https://jphacks.github.io/tkb_2603-demo/)
 
